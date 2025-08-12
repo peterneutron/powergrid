@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.neutronstar.powergrid.daemon</string>
+    <key>ProgramArguments</key>
+    <array>
+        <!-- This is the standard location for user-installed daemons -->
+        <string>/usr/local/bin/powergrid-daemon</string>
+    </array>
+    <!-- Run the daemon as soon as the system loads it -->
+    <key>RunAtLoad</key>
+    <true/>
+    <!-- If the daemon crashes, launchd will restart it automatically -->
+    <key>KeepAlive</key>
+    <true/>
+</dict>
+</plist>
