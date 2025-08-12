@@ -1,0 +1,60 @@
+syntax = "proto3";
+
+// The package path should reflect your module structure.
+package rpc;
+option go_package = "powergrid/internal/rpc";
+
+// The core PowerGrid service definition.
+service PowerGrid {
+  // GetStatus retrieves the current real-time status of the battery and daemon.
+  // It's designed to be called frequently (e.g., every few seconds).
+  rpc GetStatus(Empty) returns (StatusResponse);
+
+  // SetChargeLimit allows the UI to change the charge limit enforced by the daemon.
+  rpc SetChargeLimit(SetChargeLimitRequest) returns (Empty);
+
+  // SetPowerFeature enables or disables a power-related feature (assertions or discharge).
+  rpc SetPowerFeature(SetPowerFeatureRequest) returns (Empty);
+}
+
+message Empty {}
+
+message StatusResponse {
+  int32  current_charge = 1;
+  bool   is_charging = 2;
+  bool   is_connected = 3;
+  int32  charge_limit = 4;
+  bool   is_charge_limited = 5; // True if the daemon is actively inhibiting charge.
+  int32  cycle_count = 6;
+  string adapter_description = 7;
+  float battery_wattage = 8;
+  float adapter_wattage = 9;
+  float system_wattage = 10;
+
+  // Added fields
+  int32 health_by_max = 11;            // IOKit.Calculations.HealthByMaxCapacity
+  float adapter_input_voltage = 12;    // IOKit.Adapter.InputVoltage (V)
+  float adapter_input_amperage = 13;   // IOKit.Adapter.InputAmperage (A)
+  bool prevent_display_sleep_active = 14; // Assertion active in this process
+  bool prevent_system_sleep_active = 15;  // Assertion active in this process
+  bool force_discharge_active = 16;       // Adapter disabled via SMC
+  // SMC ground-truth bits for precise UI mapping
+  bool smc_charging_enabled = 17;         // SMC.State.IsChargingEnabled
+  bool smc_adapter_enabled = 18;          // SMC.State.IsAdapterEnabled
+}
+
+message SetChargeLimitRequest {
+  int32 limit = 1; // The new charge limit, e.g., 80.
+}
+
+enum PowerFeature {
+  POWER_FEATURE_UNSPECIFIED = 0;
+  PREVENT_DISPLAY_SLEEP = 1;
+  PREVENT_SYSTEM_SLEEP = 2;
+  FORCE_DISCHARGE = 3;
+}
+
+message SetPowerFeatureRequest {
+  PowerFeature feature = 1;
+  bool enable = 2;
+}
