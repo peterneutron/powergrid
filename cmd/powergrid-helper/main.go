@@ -20,7 +20,7 @@ const (
 )
 
 // main is the entry point for the helper.
-// It expects one argument: the path to the main application's Resources directory.
+// It expects an action ('install' or 'uninstall') and an optional path.
 func main() {
 	log.Println("PowerGrid Helper started.")
 
@@ -29,22 +29,38 @@ func main() {
 	}
 
 	if len(os.Args) < 2 {
-		log.Fatalln("FATAL: Missing required argument: path to app resources.")
+		log.Fatalf("FATAL: Missing required argument: 'install' or 'uninstall'.")
 	}
-	resourcesPath := os.Args[1]
-	log.Printf("Using resources path: %s", resourcesPath)
 
-	if err := install(); err != nil {
-		log.Fatalf("FATAL: Installation failed: %v", err)
+	action := os.Args[1]
+
+	switch action {
+	case "install":
+		if len(os.Args) < 3 {
+			log.Fatalln("FATAL: 'install' requires a path to the app resources directory.")
+		}
+		resourcesPath := os.Args[2]
+		log.Printf("Action: install. Using resources path: %s", resourcesPath)
+		if err := install(resourcesPath); err != nil {
+			log.Fatalf("FATAL: Installation failed: %v", err)
+		}
+	case "uninstall":
+		log.Printf("Action: uninstall.")
+		if err := uninstall(); err != nil {
+			log.Fatalf("FATAL: Uninstallation failed: %v", err)
+		}
+	default:
+		log.Fatalf("FATAL: Unknown action '%s'. Please use 'install' or 'uninstall'.", action)
 	}
 
 	log.Println("PowerGrid Helper finished successfully.")
 }
 
 // install performs the installation steps.
-func install() error {
+// It now takes resourcesPath as a parameter.
+func install(resourcesPath string) error {
 	log.Println("--- Starting PowerGrid Daemon Installation ---")
-	resourcesPath := os.Args[1]
+	// resourcesPath is now passed in as an argument
 
 	// 1. Unload any old version of the service to prevent conflicts
 	if _, err := os.Stat(plistInstallPath); err == nil {
@@ -93,6 +109,43 @@ func install() error {
 	log.Println("✅ Service loaded.")
 
 	log.Println("--- Installation Complete ---")
+	return nil
+}
+
+// uninstall stops the daemon and removes all installed files.
+func uninstall() error {
+	log.Println("--- Starting PowerGrid Daemon Uninstallation ---")
+
+	// 1. Unload the service from launchd.
+	// We check if the file exists before trying to unload it.
+	if _, err := os.Stat(plistInstallPath); err == nil {
+		log.Println("Unloading service...")
+		cmd := exec.Command("launchctl", "unload", plistInstallPath)
+		if output, err := cmd.CombinedOutput(); err != nil {
+			// Log as a warning and continue. The service might not be loaded, which is fine.
+			log.Printf("Warning: 'launchctl unload' failed, but continuing. Output: %s", output)
+		}
+	} else {
+		log.Println("Service plist not found, skipping unload.")
+	}
+	log.Println("✅ Service unloaded.")
+
+	// 2. Remove the launchd plist file.
+	log.Printf("Removing plist: %s", plistInstallPath)
+	if err := os.Remove(plistInstallPath); err != nil && !os.IsNotExist(err) {
+		// We only return an error if it's something other than "file not found".
+		return fmt.Errorf("failed to remove plist file: %w", err)
+	}
+	log.Println("✅ Plist file removed.")
+
+	// 3. Remove the daemon binary.
+	log.Printf("Removing daemon binary: %s", daemonInstallPath)
+	if err := os.Remove(daemonInstallPath); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("failed to remove daemon binary: %w", err)
+	}
+	log.Println("✅ Daemon binary removed.")
+
+	log.Println("--- Uninstallation Complete ---")
 	return nil
 }
 

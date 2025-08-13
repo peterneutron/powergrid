@@ -17,6 +17,7 @@ class DaemonClient: ObservableObject {
         case unknown
         case notInstalled
         case installing
+        case uninstalling
         case installed
         case failed(String)
     }
@@ -166,7 +167,7 @@ class DaemonClient: ObservableObject {
         }
         
         // The command needs to be quoted properly to handle spaces in paths.
-        let command = "do shell script \"\\\"\(helperPath)\\\" \\\"\(resourcesPath)\\\"\" with administrator privileges"
+        let command = "do shell script \"\\\"\(helperPath)\\\" install \\\"\(resourcesPath)\\\"\" with administrator privileges"
         
         var errorDict: NSDictionary?
         let script = NSAppleScript(source: command)
@@ -191,6 +192,45 @@ class DaemonClient: ObservableObject {
             } else {
                 self.installerState = .failed("An unknown error occurred during installation.")
                 log("Daemon installation failed.")
+            }
+        }
+    }
+
+    // NEW: Function to uninstall the daemon using the bundled helper.
+    func uninstallDaemon() async {
+        self.installerState = .uninstalling
+        
+        guard let helperPath = Bundle.main.path(forResource: "powergrid-helper", ofType: nil) else {
+            self.installerState = .failed("Helper tool not found in app bundle.")
+            return
+        }
+        
+        // The command for uninstalling is simpler, it just needs the action verb.
+        let command = "do shell script \"\\\"\(helperPath)\\\" uninstall\" with administrator privileges"
+        
+        var errorDict: NSDictionary?
+        let script = NSAppleScript(source: command)
+        
+        // Running the script is synchronous, so we run it in a detached task.
+        let success = await Task.detached {
+            return script?.executeAndReturnError(&errorDict) != nil
+        }.value
+        
+        if success {
+            log("Daemon uninstalled successfully.")
+            // Clean up the connection state since the daemon is gone.
+            self.rawGRPCClient?.beginGracefulShutdown()
+            self.connectionState = .disconnected
+            self.status = nil
+            self.installerState = .notInstalled
+        } else {
+            if let errorInfo = errorDict {
+                let errorMessage = errorInfo["NSAppleScriptErrorMessage"] as? String ?? "An unknown AppleScript error occurred."
+                self.installerState = .failed(errorMessage)
+                log("Daemon uninstallation failed: \(errorMessage)")
+            } else {
+                self.installerState = .failed("An unknown error occurred during uninstallation.")
+                log("Daemon uninstallation failed.")
             }
         }
     }
