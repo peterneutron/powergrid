@@ -54,20 +54,22 @@ struct MenuBarLabelView: View {
             case .installing:
                 Text("PG")
                 Image(systemName: "arrow.triangle.2.circlepath")
+            case .uninstalling:
+                Text("PG")
+                Image(systemName: "arrow.triangle.2.circlepath")
             case .installed:
                 // Once installed, revert to showing connection status.
                 switch client.connectionState {
                 case .connected:
                     if let status = client.status {
                         let chargeIcon = status.isCharging ? "bolt.fill" : "bolt.slash.fill"
-                        let limitIcon = status.isChargeLimited ? "shield.lefthalf.filled" : ""
                         
                         Text("\(status.currentCharge)%")
                         Image(systemName: chargeIcon)
                         
-                        // Only show the limit icon if it's applicable.
-                        if !limitIcon.isEmpty {
-                            Image(systemName: limitIcon)
+                        if status.isConnected && !status.isCharging && status.currentCharge >= status.chargeLimit && status.chargeLimit < 100 {
+                            // If we are paused at the limit, show the shield icon.
+                            Image(systemName: "shield.lefthalf.filled")
                         }
                     } else {
                         Text("PG")
@@ -101,6 +103,9 @@ struct AppMenuView: View {
             
             case .installing:
                 ProgressView { Text("Installing daemon...") }
+            
+            case .uninstalling:
+                ProgressView { Text("Uninstalling daemon...") }
                 
             case .notInstalled, .failed:
                 // Show the dedicated installation view.
@@ -460,6 +465,18 @@ struct FooterView: View {
                 }
 
             Divider()
+            
+            // Add the Uninstall button with a detached task to ensure it runs.
+            Button("Uninstall Daemon", role: .destructive) {
+                Task.detached(priority: .userInitiated) {
+                    await client.uninstallDaemon()
+                    // Terminate the app on the main thread for safety.
+                    await MainActor.run {
+                        NSApplication.shared.terminate(nil)
+                    }
+                }
+            }
+            
             Button("View Daemon Logs in Console...") {
                 guard let consoleURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.Console") else { return }
                 let configuration = NSWorkspace.OpenConfiguration()
