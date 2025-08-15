@@ -267,13 +267,33 @@ func (s *powerGridServer) startEventStream() {
 			s.handleSleep()
 
 		case powerkit.EventTypeSystemDidWake:
-			logger.Default("System woke up. Re-evaluating charging state in 5 seconds...")
+			logger.Default("System woke up. Re-evaluating state in 3 seconds...")
+
 			// Run the logic in a new goroutine so we don't block the event loop.
-			// A short delay allows system services to settle before we check.
+			// A short delay allows system services to settle.
 			go func() {
-				time.Sleep(5 * time.Second)
-				logger.Default("Re-evaluating charging state now.")
-				// Pass nil to force runChargingLogic to fetch fresh data.
+				time.Sleep(3 * time.Second)
+
+				// --- RE-APPLY ASSERTIONS BASED ON INTENT ---
+				s.mu.RLock()
+				shouldPreventDisplaySleep := s.wantPreventDisplaySleep
+				shouldPreventSystemSleep := s.wantPreventSystemSleep
+				s.mu.RUnlock()
+
+				if shouldPreventDisplaySleep {
+					logger.Default("Re-applying 'Prevent Display Sleep' assertion after wake.")
+					if _, err := powerkit.CreateAssertion(powerkit.AssertionTypePreventDisplaySleep, "PowerGrid: Prevent Display Sleep"); err != nil {
+						logger.Error("Failed to re-create display sleep assertion after wake: %v", err)
+					}
+				}
+				if shouldPreventSystemSleep {
+					logger.Default("Re-applying 'Prevent System Sleep' assertion after wake.")
+					if _, err := powerkit.CreateAssertion(powerkit.AssertionTypePreventSystemSleep, "PowerGrid: Prevent System Sleep"); err != nil {
+						logger.Error("Failed to re-create system sleep assertion after wake: %v", err)
+					}
+				}
+
+				// Now, run the charging logic as before.
 				s.runChargingLogic(nil)
 			}()
 
