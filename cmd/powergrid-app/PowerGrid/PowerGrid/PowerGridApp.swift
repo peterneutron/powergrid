@@ -176,32 +176,22 @@ struct InstallationView: View {
 struct MainControlsView: View {
     @ObservedObject var client: DaemonClient
     let status: Rpc_StatusResponse
-    @State private var sliderValue: Double
-    
-    // Advanced options (now driven by daemon status flags)
 
-    // Initialize the slider value from the daemon's actual status.
-    init(client: DaemonClient, status: Rpc_StatusResponse) {
-        self.client = client
-        self.status = status
-        _sliderValue = State(initialValue: Double(status.chargeLimit))
-    }
+    // The custom init and @State variable are no longer needed.
+    // The view becomes a simple container.
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HeaderView(status: status)
             Divider()
-            ControlsView(sliderValue: $sliderValue, client: client)
+            // Pass the whole client object down.
+            ControlsView(client: client)
             Divider()
-            FooterView(client: client, status: status)
-        }
-        .onAppear {
-            // Re-sync the slider with the actual limit from the daemon whenever the view appears.
-            self.sliderValue = Double(client.status?.chargeLimit ?? 80)
+            // Pass the whole client object down.
+            FooterView(client: client)
         }
     }
 }
-
 
 struct HeaderView: View {
     let status: Rpc_StatusResponse
@@ -320,52 +310,54 @@ struct HeaderView: View {
 }
 
 struct ControlsView: View {
-    @Binding var sliderValue: Double
+    // We now observe the whole client to access userIntent.
     @ObservedObject var client: DaemonClient
     
     var body: some View {
         VStack(alignment: .leading) {
             HStack {
-                Text("Charge Limit: \(Int(sliderValue))%")
+                // Read directly from the user's intent.
+                Text("Charge Limit: \(client.userIntent.chargeLimit)%")
                 Spacer()
+                // The offBinding now correctly uses the client's intent.
                 Toggle(isOn: offBinding()) { Text("Off:") }
                     .toggleStyle(.checkbox)
             }
-            Slider(value: $sliderValue, in: 60...100, step: 10) { isEditing in
-                // This closure is called when the user finishes dragging the slider.
+            // This Slider now uses a custom binding to bridge the Double/Int gap
+            // and read/write directly to the userIntent.
+            Slider(value: chargeLimitBinding(), in: 60...100, step: 5) {
+                // onEditingChanged is used to send the RPC call ONLY when the user is done.
+            } onEditingChanged: { isEditing in
                 if !isEditing {
-                    // Call our helper function to handle the async task.
-                    updateChargeLimit()
+                    Task {
+                        await client.setLimit(client.userIntent.chargeLimit)
+                    }
                 }
             }
-        }
-    }
-    
-    // By moving the logic into a separate function, we help the Swift
-    // compiler correctly resolve the call to the async 'setLimit' method.
-    // This is the definitive fix for the errors you are seeing.
-    private func updateChargeLimit() {
-        Task {
-            await client.setLimit(Int(sliderValue))
         }
     }
 }
 
 extension ControlsView {
-    // True when slider is at 100%; setting adjusts slider and persists immediately.
+    // This helper creates a Binding<Double> from our client's userIntent.chargeLimit (Int).
+    private func chargeLimitBinding() -> Binding<Double> {
+        Binding<Double>(
+            get: { Double(client.userIntent.chargeLimit) },
+            set: { client.userIntent.chargeLimit = Int($0) }
+        )
+    }
+    
+    // The logic here is now simpler, as it just manipulates the userIntent.
+    // The RPC call is handled separately by the Slider's onEditingChanged.
     func offBinding() -> Binding<Bool> {
         Binding<Bool>(
-            get: { Int(sliderValue) >= 100 },
-            set: { newVal in
+            get: { client.userIntent.chargeLimit >= 100 },
+            set: { isChecked in
+                let newLimit = isChecked ? 100 : 80
+                client.userIntent.chargeLimit = newLimit
+                // Immediately send the update when the checkbox is used.
                 Task {
-                    if newVal {
-                        sliderValue = 100
-                        await client.setLimit(100)
-                    } else {
-                        let newLimit = 80
-                        sliderValue = Double(newLimit)
-                        await client.setLimit(newLimit)
-                    }
+                    await client.setLimit(newLimit)
                 }
             }
         )
@@ -421,87 +413,66 @@ struct PowerMetricsView: View {
 // Advanced options menu integrated with daemon features
 struct FooterView: View {
     @ObservedObject var client: DaemonClient
-    let status: Rpc_StatusResponse
-
-    @State private var preventDisplaySleep: Bool
-    @State private var preventSystemSleep: Bool
-    @State private var forceDischarge: Bool
-
-    init(client: DaemonClient, status: Rpc_StatusResponse) {
-        self.client = client
-        self.status = status
-        _preventDisplaySleep = State(initialValue: status.preventDisplaySleepActive)
-        _preventSystemSleep = State(initialValue: status.preventSystemSleepActive)
-        // Reflect ground truth: checked when adapter is disabled
-        _forceDischarge = State(initialValue: !status.smcAdapterEnabled)
-    }
-
+    
     var body: some View {
-        Divider()
-        Menu("Advanced Options") {
-            Toggle("Prevent Display Sleep", isOn: $preventDisplaySleep)
-                .onChange(of: preventDisplaySleep) { _, newValue in
-                    Task { await client.setPowerFeature(feature: .preventDisplaySleep, enable: newValue) }
-                }
-            
-            // Group the toggle and its helper text for clarity
-            VStack(alignment: .leading) {
-                Toggle("Prevent System Sleep", isOn: $preventSystemSleep)
-                    .disabled(preventDisplaySleep) // This modifier is sufficient to grey out the view
-                    .onChange(of: preventSystemSleep) { _, newValue in
-                        Task { await client.setPowerFeature(feature: .preventSystemSleep, enable: newValue) }
+        VStack(alignment: .leading) { // Wrap in a VStack for proper layout
+            Divider()
+            Menu("Advanced Options") {
+                // Bind the Toggle directly to the userIntent property. The UI updates instantly.
+                Toggle("Prevent Display Sleep", isOn: $client.userIntent.preventDisplaySleep)
+                    .onChange(of: client.userIntent.preventDisplaySleep) { _, newValue in
+                        // When the intent changes, fire the RPC call.
+                        Task { await client.setPowerFeature(feature: .preventDisplaySleep, enable: newValue) }
                     }
                 
-                if preventDisplaySleep {
-                    Text("Display sleep prevention implies system sleep prevention.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                // Group the toggle and its helper text for clarity
+                VStack(alignment: .leading) {
+                    Toggle("Prevent System Sleep", isOn: $client.userIntent.preventSystemSleep)
+                        .disabled(client.userIntent.preventDisplaySleep)
+                        .onChange(of: client.userIntent.preventSystemSleep) { _, newValue in
+                            Task { await client.setPowerFeature(feature: .preventSystemSleep, enable: newValue) }
+                        }
+                    
+                    if client.userIntent.preventDisplaySleep {
+                        Text("Display sleep prevention implies system sleep prevention.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                
+                Toggle("Force Discharge", isOn: $client.userIntent.forceDischarge)
+                    .onChange(of: client.userIntent.forceDischarge) { _, newValue in
+                        Task { await client.setPowerFeature(feature: .forceDischarge, enable: newValue) }
+                    }
+                
+                Divider()
+                
+                Button(role: .destructive, action: {
+                    // The action remains the same: a detached task to uninstall.
+                    Task.detached(priority: .userInitiated) {
+                        await client.uninstallDaemon()
+                        // Terminate the app on the main thread for safety.
+                        await MainActor.run {
+                            NSApplication.shared.terminate(nil)
+                        }
+                    }
+                }, label: {
+                    // The label is now a Text view that we can style directly.
+                    Text("Uninstall Daemon")
+                        .foregroundColor(.red)
+                })
+                
+                
+                Button("View Daemon Logs in Console...") {
+                    guard let consoleURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.Console") else { return }
+                    let configuration = NSWorkspace.OpenConfiguration()
+                    NSWorkspace.shared.openApplication(at: consoleURL, configuration: configuration) { _, _ in }
                 }
             }
-            
-            Toggle("Force Discharge", isOn: $forceDischarge)
-                .onChange(of: forceDischarge) { _, newValue in
-                    Task { await client.setPowerFeature(feature: .forceDischarge, enable: newValue) }
-                }
             
             Divider()
             
-            Button(role: .destructive, action: {
-                // The action remains the same: a detached task to uninstall.
-                Task.detached(priority: .userInitiated) {
-                    await client.uninstallDaemon()
-                    // Terminate the app on the main thread for safety.
-                    await MainActor.run {
-                        NSApplication.shared.terminate(nil)
-                    }
-                }
-            }, label: {
-                // The label is now a Text view that we can style directly.
-                Text("Uninstall Daemon")
-                    .foregroundColor(.red)
-            })
-                   
-                   
-                   Button("View Daemon Logs in Console...") {
-                guard let consoleURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.Console") else { return }
-                let configuration = NSWorkspace.OpenConfiguration()
-                NSWorkspace.shared.openApplication(at: consoleURL, configuration: configuration) { _, _ in }
-            }
+            Button("Quit PowerGrid") { NSApplication.shared.terminate(nil) }
         }
-        
-        // Move the .onChange modifiers here, to the root view ---
-        .onChange(of: client.status?.preventDisplaySleepActive) { _, newVal in
-            preventDisplaySleep = newVal ?? false
-        }
-        .onChange(of: client.status?.preventSystemSleepActive) { _, newVal in
-            preventSystemSleep = newVal ?? false
-        }
-        .onChange(of: client.status?.smcAdapterEnabled) { _, newVal in
-            forceDischarge = !(newVal ?? true)
-        }
-
-        Divider()
-        
-        Button("Quit PowerGrid") { NSApplication.shared.terminate(nil) }
     }
 }

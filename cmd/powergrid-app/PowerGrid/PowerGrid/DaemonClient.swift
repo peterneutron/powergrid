@@ -7,11 +7,22 @@ import GRPCNIOTransportHTTP2Posix
 import GRPCProtobuf
 import NIOPosix
 
+struct UserIntent: Equatable {
+    // Default values
+    var chargeLimit: Int = 80
+    var preventDisplaySleep: Bool = false
+    var preventSystemSleep: Bool = false
+    var forceDischarge: Bool = false
+}
+
 @MainActor
 class DaemonClient: ObservableObject {
-    @Published var status: Rpc_StatusResponse?
+    //@Published var status: Rpc_StatusResponse?
     @Published var connectionState: ConnectionState = .disconnected
     @Published var installerState: InstallerState = .unknown
+    
+    @Published private(set) var status: Rpc_StatusResponse?
+    @Published var userIntent = UserIntent()
     
     enum InstallerState: Equatable {
         case unknown
@@ -94,6 +105,21 @@ class DaemonClient: ObservableObject {
         do {
             let response = try await client.getStatus(Rpc_Empty())
             self.status = response
+            
+            // Create a new intent based on the authoritative response from the daemon.
+            let latestIntent = UserIntent(
+                chargeLimit: Int(response.chargeLimit),
+                preventDisplaySleep: response.preventDisplaySleepActive,
+                preventSystemSleep: response.preventSystemSleepActive,
+                forceDischarge: response.forceDischargeActive
+            )
+                       
+            // Only update our local userIntent if it has drifted from the daemon's state.
+            // This prevents UI loops and ensures the daemon is the source of truth.
+            if self.userIntent != latestIntent {
+                self.userIntent = latestIntent
+            }
+            
             if connectionState != .connected {
                 connectionState = .connected
                 installerState = .installed // Successfully connected, so it must be installed.
@@ -123,6 +149,7 @@ class DaemonClient: ObservableObject {
     }
     
     func setLimit(_ newLimit: Int) async {
+        log("Setting charge limit to \(newLimit)%")
         guard let client = self.client else { return }
         
         var request = Rpc_SetChargeLimitRequest()
@@ -139,6 +166,7 @@ class DaemonClient: ObservableObject {
 
     // Toggle or set a power feature via RPC
     func setPowerFeature(feature: Rpc_PowerFeature, enable: Bool) async {
+        log("Setting feature \(feature) to \(enable)")
         guard let client = self.client else { return }
         var req = Rpc_SetPowerFeatureRequest()
         req.feature = feature
@@ -146,13 +174,14 @@ class DaemonClient: ObservableObject {
         do {
             _ = try await client.setPowerFeature(req)
             // Refresh status after change
-            await fetchStatus()
         } catch {
             print("Error setting power feature: \(error)")
         }
+        
+        await fetchStatus()
     }
     
-    // NEW: Function to install the daemon using the bundled helper.
+    // Function to install the daemon using the bundled helper.
     func installDaemon() async {
         self.installerState = .installing
         
@@ -196,7 +225,7 @@ class DaemonClient: ObservableObject {
         }
     }
 
-    // NEW: Function to uninstall the daemon using the bundled helper.
+    // Function to uninstall the daemon using the bundled helper.
     func uninstallDaemon() async {
         self.installerState = .uninstalling
         
