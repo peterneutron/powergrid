@@ -1,7 +1,7 @@
 # PowerGrid
 <img width="688" height="760" alt="powergrid" src="https://github.com/user-attachments/assets/079dae0c-5cad-4221-86fd-d45b1ea450ee" />
 
-PowerGrid is a macOS power management testbed composed of:
+PowerGrid is a macOS power management tool composed of:
 - A root daemon that monitors battery/adapter state and applies charge-limiting logic.
 - A SwiftUI menu bar app that installs the daemon and provides controls and status.
 
@@ -9,118 +9,81 @@ PowerGrid is a macOS power management testbed composed of:
 > 
 > PowerGrid is a testbed, not a polished product. Interfaces and behaviors may change. If you need a production-ready tool, consider established alternatives.
 
-## Components
+## Getting Started: Building from Source
 
-- Daemon (`cmd/powergrid-daemon`):
-  - Runs as root, exposes a gRPC API over a Unix socket at `/var/run/powergrid.sock`.
-  - Applies effective charge limits (per-user override > system default > built-in default 80%).
-  - Reacts to system events (sleep/wake/battery updates) via PowerKit-Go and SMC controls.
-  - Tracks the active console user and persists per-user limits.
-  - Writes daemon-owned config under `/Library/Application Support/com.neutronstar.powergrid/`.
+This project uses a `Makefile` to automate the build process.
 
-- App (`cmd/powergrid-app/PowerGrid`):
-  - macOS SwiftUI menu bar app that connects to the daemon and surfaces controls.
-  - Installs the daemon via a bundled helper using AppleScript with admin privileges.
-  - Shows live status and power metrics; lets you set the charge limit and toggle advanced options.
+#### 1. Prerequisites
 
-## App Features
+- macOS with Xcode installed.
+- Go toolchain.
+- Homebrew for installing protobuf dependencies:
+  ```bash
+  brew install protobuf swift-protobuf grpc-swift
+  ```
+
+#### 2. One-Time Setup in Xcode
+
+Before you can build from the command line, you need to configure code signing once in Xcode.
+
+1.  Open `PowerGrid.xcodeproj` in Xcode.
+2.  In the project navigator, select the "PowerGrid" project, then the "PowerGrid" target.
+3.  Go to the **"Signing & Capabilities"** tab.
+4.  From the **"Team"** dropdown, select your personal Apple ID. Xcode will automatically create a local development certificate for you.
+5.  You can now close Xcode.
+
+#### 3. Build the App
+
+From the root of the project directory, run the main `make` command:
+
+```bash
+make
+```
+This command will:
+- Generate the necessary gRPC Swift and Go code.
+- Copy the Swift files into the Xcode project.
+- Build and archive the application.
+- Export a clean, runnable `PowerGrid.app` into a `./build` directory.
+
+You can now run the app from the `./build` folder.
+
+## Development Workflow
+
+The `Makefile` provides several targets to streamline development:
+
+- `make`: The default command. Creates a final, optimized `.app` bundle in the `./build` directory.
+- `make proto`: Run this after editing `proto/powergrid.proto` to regenerate the gRPC code for both Swift and Go.
+- `make clean`: Removes all build artifacts and generated code to start fresh.
+- `sudo -E go run ./cmd/powergrid-daemon`: Run the daemon directly for debugging (requires root).
+
+## Features
 
 - Menu bar status with icons for charge, charging state, and limiter active.
-- Live status: current charge, charging/connected state, adapter description, health (%), cycle count.
+- Live status: current charge, adapter description, health (%), cycle count.
 - Power metrics: system, adapter, and battery wattage; adapter input voltage and amperage.
-- Charge limit slider: 60–100% (step 10); 100% acts as “Off”.
-- Advanced options:
-  - Prevent Display Sleep (creates a display sleep assertion in-app).
-  - Prevent System Sleep (creates a system sleep assertion; implied by display sleep).
-  - Force Discharge (disables adapter power via SMC until toggled off).
-- Installer flow if the daemon is missing, with progress and failure messages.
+- Charge limit slider from 60–100%.
+- Advanced options: Prevent Display/System Sleep, Force Discharge.
+- Installer flow to install/uninstall the helper daemon with administrator privileges.
 
-## Daemon Behavior
+## How It Works
 
-- Default charge limit: 80% (applied at first run and when no user is present).
-- Safety-first transitions on user changes and sleep: clears assertions, ensures adapter is on, re-evaluates charging.
-- Event-driven logic re-evaluates on battery updates and after wake.
-- Unified logging to macOS Console (subsystem `com.neutronstar.powergrid.daemon`).
+- **Daemon (`cmd/powergrid-daemon`):** Runs as root, exposing a gRPC API over a Unix socket at `/var/run/powergrid.sock`. It reacts to system power events, tracks the active user, and persists their charge limit preferences.
+- **App (`PowerGrid.xcodeproj`):** A SwiftUI menu bar app that communicates with the daemon. It bundles a helper tool to manage the installation and uninstallation of the daemon and its `launchd` service.
 
-## Configuration Storage (Daemon-Owned)
+## Configuration
 
-Root-owned config lives under:
-- Base: `/Library/Application Support/com.neutronstar.powergrid/`
-- Files:
-  - `system.json` — system default charge limit (created on first run if missing).
-  - `users/<uid>.json` — per-user overrides written when a console user changes the limit.
+The daemon stores its configuration under `/Library/Application Support/com.neutronstar.powergrid/`. It uses a user > system > default hierarchy to determine the effective charge limit.
+- `system.json`: System-wide default charge limit.
+- `users/<uid>.json`: Per-user overrides.
 
-JSON (simplified):
-```json
-{ "charge_limit": 80 }
-```
-- Limits are clamped to 60–100.
-- Effective limit resolution: user > system > default(80).
-- Legacy fallback: if a value is absent (0), the daemon can read legacy plists via `defaults`, but new writes go only to the daemon store.
+## Logging
 
-## Installation (via App)
-
-The app bundles a small helper (`cmd/powergrid-helper`) and uses AppleScript to run it with administrator privileges. The helper:
-- Copies `powergrid-daemon` to `/usr/local/bin` (0755, root:wheel).
-- Installs `com.neutronstar.powergrid.daemon.plist` to `/Library/LaunchDaemons` (0644, root:wheel).
-- Unloads any existing service, then `launchctl load` the new plist.
-
-The app detects install state and attempts to connect to `/var/run/powergrid.sock` after installation.
-
-## Development
-
-Prereqs: macOS, Xcode (for the Swift app), Go toolchain (for daemon/helper), and protoc plugins if editing `.proto`.
-
-- Build daemon/helper (Go):
+All daemon activity is logged to the macOS Unified Logging system. You can view logs using Console.app or the command line:
 ```bash
-go build ./cmd/powergrid-daemon
-go build ./cmd/powergrid-helper
+log stream --predicate 'subsystem == "com.neutronstar.powergrid.daemon"'
 ```
-
-- Run daemon directly (dev only; requires root):
-```bash
-sudo -E go run ./cmd/powergrid-daemon
-```
-
-- Build/run the app (Swift):
-  - Open `cmd/powergrid-app/PowerGrid/PowerGrid.xcodeproj` in Xcode and run.
-  - For installer testing, ensure the app bundle’s Resources include `powergrid-daemon` and `com.neutronstar.powergrid.daemon.plist`.
-
-- Generate protobufs (after editing `proto/*.proto`):
-```bash
-./scripts/gen_proto.sh
-```
-
-Notes:
-- On first daemon start, `system.json` is created with 80% if missing and not overwritten later.
-- When no console user is present, SetChargeLimit does not persist and the daemon applies the built-in default in-memory.
-
-## gRPC API
-
-- Socket: `/var/run/powergrid.sock`
-- See `proto/powergrid.proto` and generated code under `generated/go`.
-- RPCs:
-  - `GetStatus` — current charge, adapter details, health/cycles, power metrics, and feature flags.
-  - `SetChargeLimit(limit)` — validates 60–100; persists per-user when a console user is present.
-  - `SetPowerFeature` — toggles assertions and adapter power (display/system sleep, force discharge).
-
-## Logging & Observability
-
-- Subsystem: `com.neutronstar.powergrid.daemon`
-- View: Console.app or `log stream --predicate 'subsystem == "com.neutronstar.powergrid.daemon"'`
-
-## Security & Privileges
-
-- The daemon must run as root to control charging/adapter via SMC.
-- Config under `/Library/Application Support/com.neutronstar.powergrid/` is root-owned; UIs configure via gRPC.
-- No secrets are stored in the repo; any local env is for development only.
-
-## Roadmap
-
-- Expose console user and effective-limit source to UIs.
-- Admin RPC/CLI to manage `system.json` safely.
-- Hardening: permissions, error reporting, and backoff on failures.
 
 ## Acknowledgments
 
 - Built on [PowerKit-Go](https://github.com/peterneutron/powerkit-go) for IOKit/SMC access and event streaming.
+- Google Gemini and OpenAI GPT families of models and all the labs involved making these possible 🙏
