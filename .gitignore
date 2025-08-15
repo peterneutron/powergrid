@@ -61,3 +61,8 @@ repomix-output.xml
 
 # Caches
 /.cache/
+
+build
+generated
+cmd/powergrid-app/PowerGrid/PowerGrid/internal/
+

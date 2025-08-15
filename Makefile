@@ -1,0 +1,45 @@
+# Makefile for PowerGrid
+
+# --- Configuration ---
+PROJECT_NAME = PowerGrid
+PROJECT_PATH = ./cmd/powergrid-app/PowerGrid
+SCHEME_NAME = Release
+PROTO_SCRIPT = ./scripts/gen_proto.sh
+EXPORT_OPTIONS_PLIST = ./ExportOptions.plist
+
+# Define Swift file paths
+GENERATED_SWIFT_DIR = ./generated/swift
+TARGET_SWIFT_DIR = ./cmd/powergrid-app/PowerGrid/${PROJECT_NAME}/internal/rpc
+
+# --- Main Targets ---
+
+# Default target builds everything
+all: release
+
+# The 'build_app' target now depends on the 'proto' target.
+# This ensures 'make proto' is always run before 'make build_app'.
+
+release: proto
+	@echo "--> Archiving PowerGrid.app for distribution..."
+	xcodebuild -project ${PROJECT_PATH}/${PROJECT_NAME}.xcodeproj -scheme ${SCHEME_NAME} -configuration Release archive -archivePath ./build/${PROJECT_NAME}.xcarchive
+	xcodebuild -exportArchive -archivePath ./build/${PROJECT_NAME}.xcarchive -exportPath ./build -exportOptionsPlist ${EXPORT_OPTIONS_PLIST}
+
+# --- Helper Targets ---
+
+# This target orchestrates the code generation and file copying.
+proto:
+	@echo "--> Running protobuf generation script..."
+	@bash ${PROTO_SCRIPT}
+	@echo "--> Copying generated Swift files into the project..."
+	@cp ${GENERATED_SWIFT_DIR}/*.swift ${TARGET_SWIFT_DIR}/
+	@echo "✅ Swift files copied to ${TARGET_SWIFT_DIR}"
+
+clean:
+	@echo "--> Cleaning build artifacts..."
+	@xcodebuild -project ${PROJECT_PATH}/${PROJECT_NAME}.xcodeproj -scheme ${SCHEME_NAME} clean
+	@rm -rf ./build
+	@rm -rf ./generated
+	@echo "✅ Cleaned build, generated, and rpc directories."
+
+# Declare targets that are not files
+.PHONY: all build_app archive proto clean

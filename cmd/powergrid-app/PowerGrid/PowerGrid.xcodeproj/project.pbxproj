@@ -19,6 +19,20 @@
 		9ED532C82E41E77B0014EC41 /* com.neutronstar.powergrid.daemon.plist in Copy Daemon and Helper */ = {isa = PBXBuildFile; fileRef = 9ED532C72E41E77B0014EC41 /* com.neutronstar.powergrid.daemon.plist */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXBuildRule section */
+		9E9ECFF32E4F36600044F539 /* PBXBuildRule */ = {
+			isa = PBXBuildRule;
+			compilerSpec = com.apple.compilers.proxy.script;
+			fileType = pattern.proxy;
+			inputFiles = (
+			);
+			isEditable = 1;
+			outputFiles = (
+			);
+			script = "# Type a script or drag a script file from your workspace to insert its path.\n";
+		};
+/* End PBXBuildRule section */
+
 /* Begin PBXContainerItemProxy section */
 		9E434F0E2E40137A00A33F45 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -56,6 +70,7 @@
 		9E434EFF2E40137800A33F45 /* PowerGrid.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PowerGrid.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		9E434F0D2E40137A00A33F45 /* PowerGridTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PowerGridTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		9E434F172E40137A00A33F45 /* PowerGridUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PowerGridUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		9E9ECFF72E4F399C0044F539 /* project.pbxproj */ = {isa = PBXFileReference; lastKnownFileType = text.pbxproject; name = project.pbxproj; path = PowerGrid.xcodeproj/project.pbxproj; sourceTree = "<group>"; };
 		9EBF2ECE2E47807A002AC2C1 /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = wrapper; path = AppIcon.icon; sourceTree = "<group>"; };
 		9ED532C32E41E7620014EC41 /* powergrid-helper */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.executable"; name = "powergrid-helper"; path = "../../../build-go/powergrid-helper"; sourceTree = "<group>"; };
 		9ED532C42E41E7630014EC41 /* powergrid-daemon */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.executable"; name = "powergrid-daemon"; path = "../../../build-go/powergrid-daemon"; sourceTree = "<group>"; };
@@ -127,6 +142,7 @@
 		9E434EF62E40137800A33F45 = {
 			isa = PBXGroup;
 			children = (
+				9E9ECFF72E4F399C0044F539 /* project.pbxproj */,
 				9ED532C72E41E77B0014EC41 /* com.neutronstar.powergrid.daemon.plist */,
 				9ED532C42E41E7630014EC41 /* powergrid-daemon */,
 				9ED532C32E41E7620014EC41 /* powergrid-helper */,
@@ -170,6 +186,7 @@
 				9ED532C22E41E1380014EC41 /* Copy Daemon and Helper */,
 			);
 			buildRules = (
+				9E9ECFF32E4F36600044F539 /* PBXBuildRule */,
 			);
 			dependencies = (
 			);
