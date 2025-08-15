@@ -443,7 +443,7 @@ struct FooterView: View {
                 .onChange(of: preventDisplaySleep) { _, newValue in
                     Task { await client.setPowerFeature(feature: .preventDisplaySleep, enable: newValue) }
                 }
-
+            
             // Group the toggle and its helper text for clarity
             VStack(alignment: .leading) {
                 Toggle("Prevent System Sleep", isOn: $preventSystemSleep)
@@ -451,23 +451,23 @@ struct FooterView: View {
                     .onChange(of: preventSystemSleep) { _, newValue in
                         Task { await client.setPowerFeature(feature: .preventSystemSleep, enable: newValue) }
                     }
-
+                
                 if preventDisplaySleep {
                     Text("Display sleep prevention implies system sleep prevention.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
-
+            
             Toggle("Force Discharge", isOn: $forceDischarge)
                 .onChange(of: forceDischarge) { _, newValue in
                     Task { await client.setPowerFeature(feature: .forceDischarge, enable: newValue) }
                 }
-
+            
             Divider()
             
-            // Add the Uninstall button with a detached task to ensure it runs.
-            Button("Uninstall Daemon", role: .destructive) {
+            Button(role: .destructive, action: {
+                // The action remains the same: a detached task to uninstall.
                 Task.detached(priority: .userInitiated) {
                     await client.uninstallDaemon()
                     // Terminate the app on the main thread for safety.
@@ -475,9 +475,14 @@ struct FooterView: View {
                         NSApplication.shared.terminate(nil)
                     }
                 }
-            }
-            
-            Button("View Daemon Logs in Console...") {
+            }, label: {
+                // The label is now a Text view that we can style directly.
+                Text("Uninstall Daemon")
+                    .foregroundColor(.red)
+            })
+                   
+                   
+                   Button("View Daemon Logs in Console...") {
                 guard let consoleURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.Console") else { return }
                 let configuration = NSWorkspace.OpenConfiguration()
                 NSWorkspace.shared.openApplication(at: consoleURL, configuration: configuration) { _, _ in }
