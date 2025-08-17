@@ -62,15 +62,23 @@ struct MenuBarLabelView: View {
                 switch client.connectionState {
                 case .connected:
                     if let status = client.status {
-                        let chargeIcon = status.isCharging ? "bolt.fill" : "bolt.slash.fill"
-                        
+                        // Compute “paused” first (1% hysteresis + low-trickle detection)
+                        let charge     = Int(status.currentCharge)
+                        let limit      = Int(status.chargeLimit)
+                        let nearLimit  = charge >= max(limit - 1, 0)            // avoid flicker around edge
+                        let trickleish = abs(status.batteryWattage) < 0.5       // maintenance trickle
+                        let pausedAtLimit = status.isConnected && limit < 100 &&
+                                            ( nearLimit
+                                              || (!status.isCharging && charge >= limit)
+                                              || (nearLimit && trickleish) )
+
+                        // Choose one primary icon based on that state
+                        let primaryIcon = pausedAtLimit
+                            ? "shield.lefthalf.filled"
+                            : (status.isCharging ? "bolt.fill" : "bolt.slash.fill")
+
                         Text("\(status.currentCharge)%")
-                        Image(systemName: chargeIcon)
-                        
-                        if status.isConnected && !status.isCharging && status.currentCharge >= status.chargeLimit && status.chargeLimit < 100 {
-                            // If we are paused at the limit, show the shield icon.
-                            Image(systemName: "shield.lefthalf.filled")
-                        }
+                        Image(systemName: primaryIcon)
                     } else {
                         Text("PG")
                         Image(systemName: "ellipsis") // Waiting for status
