@@ -185,18 +185,19 @@ struct MainControlsView: View {
     @ObservedObject var client: DaemonClient
     let status: Rpc_StatusResponse
 
-    // The custom init and @State variable are no longer needed.
-    // The view becomes a simple container.
-
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HeaderView(status: status)
             Divider()
-            // Pass the whole client object down.
             ControlsView(client: client)
             Divider()
-            // Pass the whole client object down.
-            FooterView(client: client)
+            
+            // --- NEW LAYOUT ---
+            // 1. Add our new Quick Actions grid.
+            QuickActionsView(client: client)
+            
+            // 2. Add our new side-by-side footer.
+            FooterActionsView(client: client)
         }
     }
 }
@@ -418,69 +419,89 @@ struct PowerMetricsView: View {
     }
 }
 
-// Advanced options menu integrated with daemon features
-struct FooterView: View {
+// A new view to hold the grid of Quick Action buttons.
+struct QuickActionsView: View {
+    @ObservedObject var client: DaemonClient
+    
+    // For now, we use dummy @State variables to make the buttons interactive.
+    // Later, these will be replaced with bindings to your client.userIntent.
+    @State private var forceDischarge = false
+    @State private var preventDisplaySleep = false
+    @State private var preventSystemSleep = false
+    @State private var ecoMode = false // A good placeholder for a fourth action
+
+    var body: some View {
+        // A flexible grid that automatically spaces the 4 buttons.
+        let columns = [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())]
+        LazyVGrid(columns: columns, spacing: 16) {
+            QuickActionButton(systemImage: "battery.100.bolt.slash", title: "Discharge", isOn: $forceDischarge)
+            QuickActionButton(systemImage: "display", title: "Display", isOn: $preventDisplaySleep)
+            QuickActionButton(systemImage: "powersleep", title: "Sleep", isOn: $preventSystemSleep)
+            QuickActionButton(systemImage: "leaf.fill", title: "Eco Mode", isOn: $ecoMode)
+        }
+        .padding(.vertical, 4) // Adds a little vertical breathing room.
+    }
+}
+
+// A new footer that arranges the Advanced Options and Quit button side-by-side.
+struct FooterActionsView: View {
     @ObservedObject var client: DaemonClient
     
     var body: some View {
-        VStack(alignment: .leading) { // Wrap in a VStack for proper layout
+        VStack(spacing: 0) {
             Divider()
-            Menu("Advanced Options") {
-                // Bind the Toggle directly to the userIntent property. The UI updates instantly.
-                Toggle("Prevent Display Sleep", isOn: $client.userIntent.preventDisplaySleep)
-                    .onChange(of: client.userIntent.preventDisplaySleep) { _, newValue in
-                        // When the intent changes, fire the RPC call.
-                        Task { await client.setPowerFeature(feature: .preventDisplaySleep, enable: newValue) }
-                    }
-                
-                // Group the toggle and its helper text for clarity
-                VStack(alignment: .leading) {
-                    Toggle("Prevent System Sleep", isOn: $client.userIntent.preventSystemSleep)
-                        .disabled(client.userIntent.preventDisplaySleep)
-                        .onChange(of: client.userIntent.preventSystemSleep) { _, newValue in
-                            Task { await client.setPowerFeature(feature: .preventSystemSleep, enable: newValue) }
+                .padding(.bottom, 8)
+
+            HStack {
+                Menu("Advanced Options") {
+                    // All the previous options from FooterView go here.
+                    Toggle("Prevent Display Sleep", isOn: $client.userIntent.preventDisplaySleep)
+                        .onChange(of: client.userIntent.preventDisplaySleep) { _, newValue in
+                            Task { await client.setPowerFeature(feature: .preventDisplaySleep, enable: newValue) }
                         }
                     
-                    if client.userIntent.preventDisplaySleep {
-                        Text("Display sleep prevention implies system sleep prevention.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                
-                Toggle("Force Discharge", isOn: $client.userIntent.forceDischarge)
-                    .onChange(of: client.userIntent.forceDischarge) { _, newValue in
-                        Task { await client.setPowerFeature(feature: .forceDischarge, enable: newValue) }
-                    }
-                
-                Divider()
-                
-                Button(role: .destructive, action: {
-                    // The action remains the same: a detached task to uninstall.
-                    Task.detached(priority: .userInitiated) {
-                        await client.uninstallDaemon()
-                        // Terminate the app on the main thread for safety.
-                        await MainActor.run {
-                            NSApplication.shared.terminate(nil)
+                    VStack(alignment: .leading) {
+                        Toggle("Prevent System Sleep", isOn: $client.userIntent.preventSystemSleep)
+                            .disabled(client.userIntent.preventDisplaySleep)
+                            .onChange(of: client.userIntent.preventSystemSleep) { _, newValue in
+                                Task { await client.setPowerFeature(feature: .preventSystemSleep, enable: newValue) }
+                            }
+                        if client.userIntent.preventDisplaySleep {
+                            Text("Display sleep prevention implies system sleep prevention.")
+                                .font(.caption).foregroundStyle(.secondary)
                         }
                     }
-                }, label: {
-                    // The label is now a Text view that we can style directly.
-                    Text("Uninstall Daemon")
-                        .foregroundColor(.red)
-                })
-                
-                
-                Button("View Daemon Logs in Console...") {
-                    guard let consoleURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.Console") else { return }
-                    let configuration = NSWorkspace.OpenConfiguration()
-                    NSWorkspace.shared.openApplication(at: consoleURL, configuration: configuration) { _, _ in }
+                    
+                    Toggle("Force Discharge", isOn: $client.userIntent.forceDischarge)
+                        .onChange(of: client.userIntent.forceDischarge) { _, newValue in
+                            Task { await client.setPowerFeature(feature: .forceDischarge, enable: newValue) }
+                        }
+                    
+                    Divider()
+                    
+                    Button(role: .destructive) {
+                        Task.detached(priority: .userInitiated) {
+                            await client.uninstallDaemon()
+                            await MainActor.run { NSApplication.shared.terminate(nil) }
+                        }
+                    } label: {
+                        Text("Uninstall Daemon").foregroundColor(.red)
+                    }
+                    
+                    Button("View Daemon Logs in Console...") {
+                        guard let consoleURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.Console") else { return }
+                        let config = NSWorkspace.OpenConfiguration()
+                        NSWorkspace.shared.openApplication(at: consoleURL, configuration: config)
+                    }
                 }
+                .menuStyle(.borderlessButton)
+                .frame(maxWidth: .infinity, alignment: .leading) // This makes it take up the 2/3 space.
+
+                Button("Quit") {
+                    Task { await MainActor.run { NSApplication.shared.terminate(nil) } }
+                }
+                .keyboardShortcut("q", modifiers: .command)
             }
-            
-            Divider()
-            
-            Button("Quit PowerGrid") { NSApplication.shared.terminate(nil) }
         }
     }
 }

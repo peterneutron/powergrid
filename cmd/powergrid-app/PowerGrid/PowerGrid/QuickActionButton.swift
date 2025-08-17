@@ -1,0 +1,140 @@
+//
+//  QuickActionButton.swift
+//  PowerGrid
+//
+//
+//
+import SwiftUI
+import AppKit
+
+// MARK: - Haptics (optional)
+enum Haptics {
+    static func tap() {
+        NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
+    }
+}
+
+// MARK: - QuickActionButton
+struct QuickActionButton: View {
+    let systemImage: String
+    let title: String?
+    @Binding var isOn: Bool
+    var size: CGFloat = 48
+    var enableHaptics: Bool = true
+    var action: (() -> Void)? = nil  // runs after the toggle
+
+    @State private var hovering = false
+
+    var body: some View {
+        VStack(spacing: 8) {
+            Button {
+                isOn.toggle()
+                action?()
+                if enableHaptics { Haptics.tap() }
+            } label: {
+                Image(systemName: systemImage)
+                    .font(.system(size: size * 0.42, weight: .semibold))
+                    .symbolRenderingMode(.hierarchical)
+                    .frame(width: size, height: size)
+                    .contentShape(Circle())
+                    .accessibilityLabel(Text(title ?? systemImage))
+                    .accessibilityValue(Text(isOn ? "On" : "Off"))
+            }
+            .buttonStyle(CircleToggleStyle(isOn: isOn, hovering: hovering, size: size))
+
+            if let title {
+                Text(title)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .frame(width: size * 1.35)
+            }
+        }
+        .onHover { hovering = $0 }
+    }
+}
+
+// MARK: - CircleToggleStyle
+struct CircleToggleStyle: ButtonStyle {
+    var isOn: Bool
+    var hovering: Bool
+    var size: CGFloat
+
+    func makeBody(configuration: Configuration) -> some View {
+        let pressed = configuration.isPressed
+
+        return configuration.label
+            .scaleEffect(pressed ? 0.96 : (hovering ? 1.03 : 1.0))
+            .animation(.spring(response: 0.22, dampingFraction: 0.85), value: pressed)
+            .animation(.spring(response: 0.28, dampingFraction: 0.9), value: hovering)
+
+            // Use Color for consistent ShapeStyle type:
+            .foregroundStyle(isOn ? Color.accentColor : Color.primary.opacity(0.85))
+
+            .background(
+                ZStack {
+                    // Frosted background
+                    Circle().fill(.thinMaterial)
+
+                    // Active fill tint
+                    if isOn {
+                        Circle()
+                            .fill(Color.accentColor.opacity(0.22))
+                            .transition(.opacity)
+                    }
+
+                    // Subtle inner line
+                    Circle()
+                        .strokeBorder(Color.white.opacity(0.25), lineWidth: 0.5)
+                        .blur(radius: 0.5)
+                        .opacity(0.7)
+                }
+            )
+
+            // Accent ring — again, Color to avoid ShapeStyle mixing
+            .overlay(
+                Circle()
+                    .strokeBorder(isOn ? Color.accentColor : Color.secondary.opacity(0.35),
+                                  lineWidth: isOn ? 1.6 : 1)
+                    .opacity(hovering ? 1 : 0.8)
+            )
+
+            // Proper shadow overload (with color) to set y-offset
+            .shadow(color: .black.opacity(0.25),
+                    radius: hovering ? 6 : 3, x: 0, y: hovering ? 2 : 1)
+            .shadow(color: .black.opacity(0.001), radius: pressed ? 0 : 0.001)
+            .contentShape(Circle())
+    }
+}
+
+// MARK: - Demo
+struct QuickActionDemo: View {
+    @State private var wifi = true
+    @State private var bt = false
+    @State private var airdrop = false
+    @State private var focus = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Quick Actions").font(.headline)
+
+            let columns = [GridItem(.fixed(80)), GridItem(.fixed(80)),
+                           GridItem(.fixed(80)), GridItem(.fixed(80))]
+            LazyVGrid(columns: columns, alignment: .leading, spacing: 18) {
+                QuickActionButton(systemImage: "wifi", title: "Wi-Fi", isOn: $wifi)
+                QuickActionButton(systemImage: "bonjour", title: "AirDrop", isOn: $airdrop)
+                QuickActionButton(systemImage: "dot.radiowaves.left.and.right", title: "Bluetooth", isOn: $bt)
+                QuickActionButton(systemImage: "moon.fill", title: "Focus", isOn: $focus)
+            }
+            .padding(.top, 4)
+        }
+        .padding(16)
+        .frame(minWidth: 360)
+    }
+}
+
+#Preview {
+    QuickActionDemo()
+        .frame(width: 380)
+        .environment(\.colorScheme, .dark)
+}
