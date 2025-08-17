@@ -370,7 +370,7 @@ struct ControlsView: View {
             }
             // This Slider now uses a custom binding to bridge the Double/Int gap
             // and read/write directly to the userIntent.
-            Slider(value: chargeLimitBinding(), in: 60...100, step: 5) {
+            Slider(value: chargeLimitBinding(), in: 60...100, step: 10) {
                 // onEditingChanged is used to send the RPC call ONLY when the user is done.
             } onEditingChanged: { isEditing in
                 if !isEditing {
@@ -465,33 +465,49 @@ struct QuickActionsView: View {
             QuickActionButton(
                 imageOff: "bolt.fill",                  // Icon for normal state
                 imageOn: "bolt.slash.fill",             // Icon for discharge active
-                title: "Discharge",
-                isOn: $client.userIntent.forceDischarge // Bind to the REAL state
+                title: "Force Discharge",
+                isOn: $client.userIntent.forceDischarge, // Bind to the REAL state
+                helpText: client.userIntent.forceDischarge
+                    ? "Force discharge"
+                    : "Charge normally",
+                showsCaption: false
             ) {
-                // Fire the RPC call to the daemon after the toggle flips.
                 Task {
-                    await client.setPowerFeature(feature: .forceDischarge, enable: client.userIntent.forceDischarge)
+                    await client.setPowerFeature(
+                        feature: .forceDischarge,
+                        enable: client.userIntent.forceDischarge
+                    )
                 }
             }
             
             QuickActionButton(
-                imageOff: "moon.fill",                          // Icon when sleep is allowed
-                imageOn: "sun.max.fill",                        // Icon when sleep is prevented
-                title: "Sleep",
-                isOn: $client.userIntent.preventDisplaySleep    // Bind to the REAL state
+                imageOff: "moon.fill",
+                imageOn: "sun.max.fill",
+                title: "Display Sleep",
+                isOn: $client.userIntent.preventDisplaySleep,
+                helpText: client.userIntent.preventDisplaySleep
+                    ? "Prevents display sleep"
+                    : "Allows display sleep",
+                showsCaption: false
             ) {
-                // Fire the RPC call to the daemon after the toggle flips.
                 Task {
-                    await client.setPowerFeature(feature: .preventDisplaySleep, enable: client.userIntent.preventDisplaySleep)
+                    await client.setPowerFeature(
+                        feature: .preventDisplaySleep,
+                        enable: client.userIntent.preventDisplaySleep
+                    )
                 }
             }
             
             QuickActionButton(
-                imageOff: "lock.fill",       // Icon when a limit IS active
-                imageOn: "infinity",         // Icon when the limit is OFF (unlimited)
+                imageOff: "infinity",       // Icon when a limit IS active
+                imageOn: "lock.fill",         // Icon when the limit is OFF (unlimited)
                 title: "Limit",
-                isOn: offBinding(),          // Use our custom binding helper
-                action: nil                  // The binding handles the action, so none is needed here.
+                isOn: limitBinding(),          // Use our custom binding helper
+                helpText: client.userIntent.chargeLimit >= 100
+                    ? "Charging unlimited (100%)"
+                    : "Charging limited to \(client.userIntent.chargeLimit)%",
+                showsCaption: false,
+                action: nil,                  // The binding handles the action, so none is needed here.
             )
             
             QuickActionButton(
@@ -499,10 +515,12 @@ struct QuickActionsView: View {
                 imageOn: nil,
                 title: "Icons",
                 isOn: .constant(true),
+                activeTintColor: styleButtonTintColor, // <-- This is now the last parameter
+                helpText: "Cycle menu bar display style (\(styleLabel()))",
+                showsCaption: false,
                 action: { // <-- This is the labeled parameter
                     client.userIntent.menuBarDisplayStyle = client.userIntent.menuBarDisplayStyle.next()
                 },
-                activeTintColor: styleButtonTintColor // <-- This is now the last parameter
             )
             .id(client.userIntent.menuBarDisplayStyle.rawValue) // <-- This is still essential
         }
@@ -522,29 +540,32 @@ struct QuickActionsView: View {
     }
 
     
+    private func styleLabel() -> String {
+        switch client.userIntent.menuBarDisplayStyle {
+        case .iconAndText: return "Icon + Text"
+        case .iconOnly:    return "Icon Only"
+        case .textOnly:    return "Text Only"
+        }
+    }
+    
     // This helper function returns the correct icon name for the current display style.
     private func styleIconName() -> String {
         switch client.userIntent.menuBarDisplayStyle {
-        case .iconAndText:
-            return "1.circle"
-        case .iconOnly:
-            return "2.circle"
-        case .textOnly:
-            return "3.circle"
+        case .iconAndText: return "1.circle"
+        case .iconOnly:    return "2.circle"
+        case .textOnly:    return "3.circle"
         }
     }
     // This helper function creates the binding that mirrors the Toggle's behavior.
     // It reads from and writes to the client's userIntent.
-    private func offBinding() -> Binding<Bool> {
+    // Rename for clarity:
+    private func limitBinding() -> Binding<Bool> {
         Binding<Bool>(
-            get: { client.userIntent.chargeLimit >= 100 },
-            set: { isChecked in
-                let newLimit = isChecked ? 100 : 80 // or your preferred default limit
+            get: { client.userIntent.chargeLimit < 100 },   // true when LIMITED
+            set: { turnOn in
+                let newLimit = turnOn ? 80 : 100            // on = limited (e.g. 80%), off = unlimited
                 client.userIntent.chargeLimit = newLimit
-                // Immediately send the update to the daemon.
-                Task {
-                    await client.setLimit(newLimit)
-                }
+                Task { await client.setLimit(newLimit) }
             }
         )
     }
