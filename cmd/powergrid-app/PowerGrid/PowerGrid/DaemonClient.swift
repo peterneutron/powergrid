@@ -2,7 +2,6 @@
 
 import Foundation
 import GRPCCore
-//import GRPCNIOTransportHTTP2 // seems redundant as we already import HTTP"Posix below
 import GRPCNIOTransportHTTP2Posix
 import GRPCProtobuf
 import NIOPosix
@@ -13,6 +12,7 @@ struct UserIntent: Equatable {
     var preventDisplaySleep: Bool = false
     var preventSystemSleep: Bool = false
     var forceDischarge: Bool = false
+    var menuBarDisplayStyle: MenuBarDisplayStyle = .iconAndText // Add the new property with a default
 }
 
 @MainActor
@@ -22,7 +22,17 @@ class DaemonClient: ObservableObject {
     @Published var installerState: InstallerState = .unknown
     
     @Published private(set) var status: Rpc_StatusResponse?
-    @Published var userIntent = UserIntent()
+    // 2. Add a didSet observer to userIntent to automatically save the setting.
+    @Published var userIntent = UserIntent() {
+        didSet {
+            // This observer fires whenever userIntent is changed.
+            // We check if the display style is what changed, and if so, save it.
+            if userIntent.menuBarDisplayStyle != oldValue.menuBarDisplayStyle {
+                UserDefaults.standard.set(userIntent.menuBarDisplayStyle.rawValue, forKey: AppSettings.menuBarDisplayStyleKey)
+                log("Saved menu bar display style: \(userIntent.menuBarDisplayStyle.rawValue)")
+            }
+        }
+    }
     
     enum InstallerState: Equatable {
         case unknown
@@ -46,6 +56,15 @@ class DaemonClient: ObservableObject {
     private let group = MultiThreadedEventLoopGroup(numberOfThreads: 1)
     
     init() {
+        // Load the saved display style from UserDefaults.
+        if let savedValue = UserDefaults.standard.string(forKey: AppSettings.menuBarDisplayStyleKey),
+           let style = MenuBarDisplayStyle(rawValue: savedValue) {
+            // If a value was found, apply it to our initial userIntent.
+            self.userIntent.menuBarDisplayStyle = style
+            log("Loaded menu bar display style: \(style.rawValue)")
+        }
+        
+        // Now proceed with the connection.
         connect()
     }
     
@@ -106,18 +125,21 @@ class DaemonClient: ObservableObject {
             let response = try await client.getStatus(Rpc_Empty())
             self.status = response
             
-            // Create a new intent based on the authoritative response from the daemon.
-            let latestIntent = UserIntent(
+            // 4. CRITICAL FIX: Preserve the UI setting when updating state from the daemon.
+            // Create an intent based on the daemon's response...
+            let latestIntentFromServer = UserIntent(
                 chargeLimit: Int(response.chargeLimit),
                 preventDisplaySleep: response.preventDisplaySleepActive,
                 preventSystemSleep: response.preventSystemSleepActive,
-                forceDischarge: response.forceDischargeActive
+                forceDischarge: response.forceDischargeActive,
+                // ...but PRESERVE the existing UI preference, which the daemon doesn't know about.
+                menuBarDisplayStyle: self.userIntent.menuBarDisplayStyle
             )
                        
-            // Only update our local userIntent if it has drifted from the daemon's state.
-            // This prevents UI loops and ensures the daemon is the source of truth.
-            if self.userIntent != latestIntent {
-                self.userIntent = latestIntent
+            // This logic now works perfectly. It compares the daemon-related state
+            // and won't overwrite our UI preference.
+            if self.userIntent != latestIntentFromServer {
+                self.userIntent = latestIntentFromServer
             }
             
             if connectionState != .connected {

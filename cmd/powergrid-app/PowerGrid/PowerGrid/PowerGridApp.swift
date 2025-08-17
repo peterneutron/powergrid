@@ -57,31 +57,27 @@ struct MenuBarLabelView: View {
             case .uninstalling:
                 Text("PG")
                 Image(systemName: "arrow.triangle.2.circlepath")
+                
             case .installed:
-                // Once installed, revert to showing connection status.
+                // This entire structure is preserved.
                 switch client.connectionState {
                 case .connected:
                     if let status = client.status {
-                        // Compute “paused” first (1% hysteresis + low-trickle detection)
-                        let charge     = Int(status.currentCharge)
-                        let limit      = Int(status.chargeLimit)
-                        let nearLimit  = charge >= max(limit - 1, 0)            // avoid flicker around edge
-                        let trickleish = abs(status.batteryWattage) < 0.5       // maintenance trickle
-                        let pausedAtLimit = status.isConnected && limit < 100 &&
-                                            ( nearLimit
-                                              || (!status.isCharging && charge >= limit)
-                                              || (nearLimit && trickleish) )
-
-                        // Choose one primary icon based on that state
-                        let primaryIcon = pausedAtLimit
-                            ? "shield.lefthalf.filled"
-                            : (status.isCharging ? "bolt.fill" : "bolt.slash.fill")
-
-                        Text("\(status.currentCharge)%")
-                        Image(systemName: primaryIcon)
+                        // --- THE NEW LOGIC IS INJECTED HERE ---
+                        // We switch on the user's preference to decide what to show.
+                        switch client.userIntent.menuBarDisplayStyle {
+                        case .iconAndText:
+                            StatusTextLabel(status: status)
+                            StatusIconLabel(status: status)
+                        case .iconOnly:
+                            StatusIconLabel(status: status)
+                        case .textOnly:
+                            StatusTextLabel(status: status)
+                        }
                     } else {
+                        // This fallback is preserved.
                         Text("PG")
-                        Image(systemName: "ellipsis") // Waiting for status
+                        Image(systemName: "ellipsis")
                     }
                 case .disconnected:
                     Text("PG")
@@ -90,11 +86,51 @@ struct MenuBarLabelView: View {
                     Text("PG")
                     Image(systemName: "arrow.triangle.2.circlepath")
                 }
+            
             case .unknown:
                 Text("PG")
                 Image(systemName: "hourglass")
             }
         }
+        // Remember to apply your global modifiers for color, rendering, etc. here.
+    }
+}
+
+// A helper view to render JUST the text portion of the status.
+private struct StatusTextLabel: View {
+    let status: Rpc_StatusResponse
+    var body: some View {
+        // Using Int() to show a clean percentage without decimals.
+        Text("\(Int(status.currentCharge))%")
+    }
+}
+
+// A helper view to render JUST the icon portion of the status.
+// THIS CONTAINS ALL OF YOUR CUSTOM LOGIC.
+private struct StatusIconLabel: View {
+    let status: Rpc_StatusResponse
+
+    // The logic is moved into a computed property to keep the body clean.
+    private var primaryIconName: String {
+        // Your sophisticated "paused" logic is preserved exactly.
+        let charge     = Int(status.currentCharge)
+        let limit      = Int(status.chargeLimit)
+        let nearLimit  = charge >= max(limit - 1, 0)
+        let trickleish = abs(status.batteryWattage) < 0.5
+        let pausedAtLimit = status.isConnected && limit < 100 &&
+                            ( nearLimit
+                              || (!status.isCharging && charge >= limit)
+                              || (nearLimit && trickleish) )
+
+        // The icon choice logic is also preserved.
+        return pausedAtLimit
+            ? "shield.lefthalf.filled"
+            : (status.isCharging ? "bolt.fill" : "bolt.slash.fill")
+    }
+
+    var body: some View {
+        // The body simply renders the result of our logic.
+        Image(systemName: primaryIconName)
     }
 }
 
@@ -423,17 +459,14 @@ struct PowerMetricsView: View {
 struct QuickActionsView: View {
     @ObservedObject var client: DaemonClient
     
-    // For now, we use dummy @State variables to make the buttons interactive.
-    // @State private var preventSystemSleep = false
-    
     var body: some View {
-        let columns = [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())]
+        let columns = [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())]
         LazyVGrid(columns: columns, spacing: 16) {
             QuickActionButton(
-                            imageOff: "bolt.fill",                  // Icon for normal state
-                            imageOn: "bolt.slash.fill",             // Icon for discharge active
-                            title: "Force Discharge",
-                            isOn: $client.userIntent.forceDischarge // Bind to the REAL state
+                imageOff: "bolt.fill",                  // Icon for normal state
+                imageOn: "bolt.slash.fill",             // Icon for discharge active
+                title: "Discharge",
+                isOn: $client.userIntent.forceDischarge // Bind to the REAL state
             ) {
                 // Fire the RPC call to the daemon after the toggle flips.
                 Task {
@@ -444,7 +477,7 @@ struct QuickActionsView: View {
             QuickActionButton(
                 imageOff: "moon.fill",                          // Icon when sleep is allowed
                 imageOn: "sun.max.fill",                        // Icon when sleep is prevented
-                title: "Display Sleep",
+                title: "Sleep",
                 isOn: $client.userIntent.preventDisplaySleep    // Bind to the REAL state
             ) {
                 // Fire the RPC call to the daemon after the toggle flips.
@@ -456,17 +489,50 @@ struct QuickActionsView: View {
             QuickActionButton(
                 imageOff: "lock.fill",       // Icon when a limit IS active
                 imageOn: "infinity",         // Icon when the limit is OFF (unlimited)
-                title: "No Limit",
+                title: "Limit",
                 isOn: offBinding(),          // Use our custom binding helper
                 action: nil                  // The binding handles the action, so none is needed here.
             )
             
-            // Dummy Button
-            // QuickActionButton(imageOff: "powersleep", imageOn: nil, title: "Sleep", isOn: $preventSystemSleep)
+            QuickActionButton(
+                imageOff: styleIconName(),
+                imageOn: nil,
+                title: "Icons",
+                isOn: .constant(true),
+                action: { // <-- This is the labeled parameter
+                    client.userIntent.menuBarDisplayStyle = client.userIntent.menuBarDisplayStyle.next()
+                },
+                activeTintColor: styleButtonTintColor // <-- This is now the last parameter
+            )
+            .id(client.userIntent.menuBarDisplayStyle.rawValue) // <-- This is still essential
         }
         .padding(.vertical, 4)
     }
     
+    // This computed property returns a different color for each display style.
+    private var styleButtonTintColor: Color {
+        switch client.userIntent.menuBarDisplayStyle {
+        case .iconAndText:
+            return .blue // The standard, default tint color.
+        case .iconOnly:
+            return .green // A distinct color for the "icon only" state.
+        case .textOnly:
+            return .orange // A distinct color for the "text only" state.
+        }
+    }
+
+    
+    // This helper function returns the correct icon name for the current display style.
+    private func styleIconName() -> String {
+        switch client.userIntent.menuBarDisplayStyle {
+        case .iconAndText:
+            return "1.circle"
+        case .iconOnly:
+            return "2.circle"
+        case .textOnly:
+            return "3.circle"
+        }
+    }
     // This helper function creates the binding that mirrors the Toggle's behavior.
     // It reads from and writes to the client's userIntent.
     private func offBinding() -> Binding<Bool> {
