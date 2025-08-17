@@ -1,5 +1,7 @@
 # PowerGrid
-<img width="688" height="760" alt="powergrid" src="https://github.com/user-attachments/assets/079dae0c-5cad-4221-86fd-d45b1ea450ee" />
+<img width="688" height="760" alt="powergrid" src="assets/powergrid.png" />
+
+---
 
 PowerGrid is a macOS power management tool composed of:
 - A root daemon that monitors battery/adapter state and applies charge-limiting logic.
