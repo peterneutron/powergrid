@@ -59,6 +59,7 @@ The `Makefile` provides several targets to streamline development:
 ## Features
 
 - Menu bar status with icons for charge, charging state, and limiter active.
+- Control Center-Inspired Toggles: A grid of beautiful, macOS-style buttons provides immediate, one-click access to essential power management functions like Force Discharge and Prevent Display Sleep.
 - Live status: current charge, adapter description, health (%), cycle count.
 - Power metrics: system, adapter, and battery wattage; adapter input voltage and amperage.
 - Charge limit slider from 60–100%.

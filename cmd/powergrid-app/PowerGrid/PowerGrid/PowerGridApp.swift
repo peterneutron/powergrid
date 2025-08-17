@@ -424,22 +424,63 @@ struct QuickActionsView: View {
     @ObservedObject var client: DaemonClient
     
     // For now, we use dummy @State variables to make the buttons interactive.
-    // Later, these will be replaced with bindings to your client.userIntent.
-    @State private var forceDischarge = false
-    @State private var preventDisplaySleep = false
-    @State private var preventSystemSleep = false
-    @State private var ecoMode = false // A good placeholder for a fourth action
-
+    // @State private var preventSystemSleep = false
+    
     var body: some View {
-        // A flexible grid that automatically spaces the 4 buttons.
-        let columns = [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())]
+        let columns = [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())]
         LazyVGrid(columns: columns, spacing: 16) {
-            QuickActionButton(systemImage: "battery.100.bolt.slash", title: "Discharge", isOn: $forceDischarge)
-            QuickActionButton(systemImage: "display", title: "Display", isOn: $preventDisplaySleep)
-            QuickActionButton(systemImage: "powersleep", title: "Sleep", isOn: $preventSystemSleep)
-            QuickActionButton(systemImage: "leaf.fill", title: "Eco Mode", isOn: $ecoMode)
+            QuickActionButton(
+                            imageOff: "bolt.fill",                  // Icon for normal state
+                            imageOn: "bolt.slash.fill",             // Icon for discharge active
+                            title: "Force Discharge",
+                            isOn: $client.userIntent.forceDischarge // Bind to the REAL state
+            ) {
+                // Fire the RPC call to the daemon after the toggle flips.
+                Task {
+                    await client.setPowerFeature(feature: .forceDischarge, enable: client.userIntent.forceDischarge)
+                }
+            }
+            
+            QuickActionButton(
+                imageOff: "moon.fill",                          // Icon when sleep is allowed
+                imageOn: "sun.max.fill",                        // Icon when sleep is prevented
+                title: "Display Sleep",
+                isOn: $client.userIntent.preventDisplaySleep    // Bind to the REAL state
+            ) {
+                // Fire the RPC call to the daemon after the toggle flips.
+                Task {
+                    await client.setPowerFeature(feature: .preventDisplaySleep, enable: client.userIntent.preventDisplaySleep)
+                }
+            }
+            
+            QuickActionButton(
+                imageOff: "lock.fill",       // Icon when a limit IS active
+                imageOn: "infinity",         // Icon when the limit is OFF (unlimited)
+                title: "No Limit",
+                isOn: offBinding(),          // Use our custom binding helper
+                action: nil                  // The binding handles the action, so none is needed here.
+            )
+            
+            // Dummy Button
+            // QuickActionButton(imageOff: "powersleep", imageOn: nil, title: "Sleep", isOn: $preventSystemSleep)
         }
-        .padding(.vertical, 4) // Adds a little vertical breathing room.
+        .padding(.vertical, 4)
+    }
+    
+    // This helper function creates the binding that mirrors the Toggle's behavior.
+    // It reads from and writes to the client's userIntent.
+    private func offBinding() -> Binding<Bool> {
+        Binding<Bool>(
+            get: { client.userIntent.chargeLimit >= 100 },
+            set: { isChecked in
+                let newLimit = isChecked ? 100 : 80 // or your preferred default limit
+                client.userIntent.chargeLimit = newLimit
+                // Immediately send the update to the daemon.
+                Task {
+                    await client.setLimit(newLimit)
+                }
+            }
+        )
     }
 }
 
@@ -494,7 +535,7 @@ struct FooterActionsView: View {
                         NSWorkspace.shared.openApplication(at: consoleURL, configuration: config)
                     }
                 }
-                .menuStyle(.borderlessButton)
+                // .menuStyle(.borderlessButton)
                 .frame(maxWidth: .infinity, alignment: .leading) // This makes it take up the 2/3 space.
 
                 Button("Quit") {
