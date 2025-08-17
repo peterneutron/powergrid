@@ -88,7 +88,7 @@ struct CircleToggleStyle: ButtonStyle {
             .animation(.spring(response: 0.28, dampingFraction: 0.9), value: hovering)
 
             // Use Color for consistent ShapeStyle type:
-            .foregroundStyle(isOn ? Color.accentColor : Color.primary.opacity(0.85))
+            .foregroundStyle(isOn ? tintColor : Color.primary.opacity(0.85))
 
             .background(
                 ZStack {
