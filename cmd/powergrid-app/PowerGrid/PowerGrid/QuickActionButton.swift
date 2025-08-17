@@ -16,24 +16,26 @@ enum Haptics {
 
 // MARK: - QuickActionButton
 struct QuickActionButton: View {
-    let imageOff: String          // The icon for the "off" state (previously systemImage)
-    let imageOn: String?          // An optional, different icon for the "on" state
-    let title: String?
+    let imageOff: String
+    let imageOn: String?
+    let title: String?                 // keep for semantics + default tooltip
     @Binding var isOn: Bool
     var size: CGFloat = 48
     var enableHaptics: Bool = true
-    var action: (() -> Void)? = nil  // runs after the toggle
     var activeTintColor: Color? = nil
+
+    // NEW:
+    var helpText: String? = nil        // custom tooltip text
+    var showsCaption: Bool = false     // hide label by default
+    var accessibilityLabelText: String? = nil
+    var action: (() -> Void)? = nil
 
     @State private var hovering = false
 
     var body: some View {
-        
-        // --- LOGIC TO CHOOSE THE ICON ---
-        // If an 'on' image is provided, use it; otherwise, fall back to the 'off' image.
         let currentImage = isOn ? (imageOn ?? imageOff) : imageOff
-        
-        VStack(spacing: 8) {
+
+        VStack(spacing: showsCaption ? 8 : 0) {
             Button {
                 isOn.toggle()
                 action?()
@@ -44,21 +46,20 @@ struct QuickActionButton: View {
                     .symbolRenderingMode(.hierarchical)
                     .frame(width: size, height: size)
                     .contentShape(Circle())
-                    .accessibilityLabel(Text(title ?? currentImage))
-                    .accessibilityValue(Text(isOn ? "On" : "Off"))
             }
+            .help(helpText ?? title ?? currentImage) // tooltip
+            .accessibilityLabel(Text(accessibilityLabelText ?? title ?? currentImage))
+            .accessibilityValue(Text(isOn ? "On" : "Off"))
             .buttonStyle(
-                            CircleToggleStyle(
-                                isOn: isOn,
-                                hovering: hovering,
-                                size: size,
-                                // If a custom color was provided, use it.
-                                // Otherwise, the style will use its default .tint.
-                                tintColor: activeTintColor ?? .accentColor
-                            )
-                        )
+                CircleToggleStyle(
+                    isOn: isOn,
+                    hovering: hovering,
+                    size: size,
+                    tintColor: activeTintColor ?? .accentColor
+                )
+            )
 
-            if let title {
+            if showsCaption, let title {
                 Text(title)
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(.secondary)
