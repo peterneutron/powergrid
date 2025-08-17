@@ -23,6 +23,7 @@ struct QuickActionButton: View {
     var size: CGFloat = 48
     var enableHaptics: Bool = true
     var action: (() -> Void)? = nil  // runs after the toggle
+    var activeTintColor: Color? = nil
 
     @State private var hovering = false
 
@@ -46,7 +47,16 @@ struct QuickActionButton: View {
                     .accessibilityLabel(Text(title ?? currentImage))
                     .accessibilityValue(Text(isOn ? "On" : "Off"))
             }
-            .buttonStyle(CircleToggleStyle(isOn: isOn, hovering: hovering, size: size))
+            .buttonStyle(
+                            CircleToggleStyle(
+                                isOn: isOn,
+                                hovering: hovering,
+                                size: size,
+                                // If a custom color was provided, use it.
+                                // Otherwise, the style will use its default .tint.
+                                tintColor: activeTintColor ?? .accentColor
+                            )
+                        )
 
             if let title {
                 Text(title)
@@ -65,6 +75,9 @@ struct CircleToggleStyle: ButtonStyle {
     var isOn: Bool
     var hovering: Bool
     var size: CGFloat
+    // We default it to .tint so existing buttons that don't provide
+    // a color will continue to work as they did before.
+    var tintColor: Color = .accentColor
 
     func makeBody(configuration: Configuration) -> some View {
         let pressed = configuration.isPressed
@@ -85,7 +98,7 @@ struct CircleToggleStyle: ButtonStyle {
                     // Active fill tint
                     if isOn {
                         Circle()
-                            .fill(Color.accentColor.opacity(0.22))
+                            .fill(tintColor.opacity(0.22)) // Use the property
                             .transition(.opacity)
                     }
 
@@ -100,7 +113,7 @@ struct CircleToggleStyle: ButtonStyle {
             // Accent ring — again, Color to avoid ShapeStyle mixing
             .overlay(
                 Circle()
-                    .strokeBorder(isOn ? Color.accentColor : Color.secondary.opacity(0.35),
+                    .strokeBorder(isOn ? tintColor : .secondary.opacity(0.35), // Use the property
                                   lineWidth: isOn ? 1.6 : 1)
                     .opacity(hovering ? 1 : 0.8)
             )
