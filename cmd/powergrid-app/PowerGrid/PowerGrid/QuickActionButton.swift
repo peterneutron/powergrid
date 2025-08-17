@@ -16,7 +16,8 @@ enum Haptics {
 
 // MARK: - QuickActionButton
 struct QuickActionButton: View {
-    let systemImage: String
+    let imageOff: String          // The icon for the "off" state (previously systemImage)
+    let imageOn: String?          // An optional, different icon for the "on" state
     let title: String?
     @Binding var isOn: Bool
     var size: CGFloat = 48
@@ -26,18 +27,23 @@ struct QuickActionButton: View {
     @State private var hovering = false
 
     var body: some View {
+        
+        // --- LOGIC TO CHOOSE THE ICON ---
+        // If an 'on' image is provided, use it; otherwise, fall back to the 'off' image.
+        let currentImage = isOn ? (imageOn ?? imageOff) : imageOff
+        
         VStack(spacing: 8) {
             Button {
                 isOn.toggle()
                 action?()
                 if enableHaptics { Haptics.tap() }
             } label: {
-                Image(systemName: systemImage)
+                Image(systemName: currentImage)
                     .font(.system(size: size * 0.42, weight: .semibold))
                     .symbolRenderingMode(.hierarchical)
                     .frame(width: size, height: size)
                     .contentShape(Circle())
-                    .accessibilityLabel(Text(title ?? systemImage))
+                    .accessibilityLabel(Text(title ?? currentImage))
                     .accessibilityValue(Text(isOn ? "On" : "Off"))
             }
             .buttonStyle(CircleToggleStyle(isOn: isOn, hovering: hovering, size: size))
@@ -108,33 +114,33 @@ struct CircleToggleStyle: ButtonStyle {
 }
 
 // MARK: - Demo
-struct QuickActionDemo: View {
-    @State private var wifi = true
-    @State private var bt = false
-    @State private var airdrop = false
-    @State private var focus = false
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("Quick Actions").font(.headline)
-
-            let columns = [GridItem(.fixed(80)), GridItem(.fixed(80)),
-                           GridItem(.fixed(80)), GridItem(.fixed(80))]
-            LazyVGrid(columns: columns, alignment: .leading, spacing: 18) {
-                QuickActionButton(systemImage: "wifi", title: "Wi-Fi", isOn: $wifi)
-                QuickActionButton(systemImage: "bonjour", title: "AirDrop", isOn: $airdrop)
-                QuickActionButton(systemImage: "dot.radiowaves.left.and.right", title: "Bluetooth", isOn: $bt)
-                QuickActionButton(systemImage: "moon.fill", title: "Focus", isOn: $focus)
-            }
-            .padding(.top, 4)
-        }
-        .padding(16)
-        .frame(minWidth: 360)
-    }
-}
-
-#Preview {
-    QuickActionDemo()
-        .frame(width: 380)
-        .environment(\.colorScheme, .dark)
-}
+// struct QuickActionDemo: View {
+//    @State private var wifi = true
+//    @State private var bt = false
+//    @State private var airdrop = false
+//    @State private var focus = false
+//
+//    var body: some View {
+//        VStack(alignment: .leading, spacing: 14) {
+//            Text("Quick Actions").font(.headline)
+//
+//            let columns = [GridItem(.fixed(80)), GridItem(.fixed(80)),
+//                           GridItem(.fixed(80)), GridItem(.fixed(80))]
+//            LazyVGrid(columns: columns, alignment: .leading, spacing: 18) {
+//                QuickActionButton(systemImage: "wifi", title: "Wi-Fi", isOn: $wifi)
+//                QuickActionButton(systemImage: "bonjour", title: "AirDrop", isOn: $airdrop)
+//                QuickActionButton(systemImage: "dot.radiowaves.left.and.right", title: "Bluetooth", isOn: $bt)
+//                QuickActionButton(systemImage: "moon.fill", title: "Focus", isOn: $focus)
+//            }
+//            .padding(.top, 4)
+//        }
+//        .padding(16)
+//        .frame(minWidth: 360)
+//    }
+//}
+//
+//#Preview {
+//    QuickActionDemo()
+//        .frame(width: 380)
+//        .environment(\.colorScheme, .dark)
+//}
