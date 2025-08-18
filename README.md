@@ -1,5 +1,5 @@
 # PowerGrid
-<img width="688" height="760" alt="powergrid" src="assets/powergrid.png" />
+<img alt="Main View" src="assets/powergrid.png" />
 
 ---
 
@@ -9,7 +9,21 @@ PowerGrid is a macOS power management tool composed of:
 
 > ⚠️ Experimental project
 > 
-> PowerGrid is a testbed, not a polished product. Interfaces and behaviors may change. If you need a production-ready tool, consider established alternatives.
+> PowerGrid is a testbed, not a polished product. Interfaces and behaviors may change. If you need a production-ready tool, consider established alternatives. Some noteworthy ones are listed below.
+>
+> - [batt](https://github.com/charlie0129/batt)
+> - [battery](https://github.com/actuallymentor/battery)
+
+
+## Features
+
+- Menu bar status with icons for charge, charging state, and limiter active.
+- Control Center-Inspired Toggles: A grid of beautiful, macOS-style buttons provides immediate, one-click access to essential power management functions like Force Discharge and Prevent Display Sleep.
+- Live status: current charge, adapter description, health (%), cycle count.
+- Power metrics: system, adapter, and battery wattage; adapter input voltage and amperage.
+- Charge limit slider from 60–100%.
+- Advanced options: Prevent Display/System Sleep, Force Discharge.
+- Installer flow to install/uninstall the helper daemon with administrator privileges.
 
 ## Getting Started: Building from Source
 
@@ -57,16 +71,6 @@ The `Makefile` provides several targets to streamline development:
 - `make proto`: Run this after editing `proto/powergrid.proto` to regenerate the gRPC code for both Swift and Go.
 - `make clean`: Removes all build artifacts and generated code to start fresh.
 - `sudo -E go run ./cmd/powergrid-daemon`: Run the daemon directly for debugging (requires root).
-
-## Features
-
-- Menu bar status with icons for charge, charging state, and limiter active.
-- Control Center-Inspired Toggles: A grid of beautiful, macOS-style buttons provides immediate, one-click access to essential power management functions like Force Discharge and Prevent Display Sleep.
-- Live status: current charge, adapter description, health (%), cycle count.
-- Power metrics: system, adapter, and battery wattage; adapter input voltage and amperage.
-- Charge limit slider from 60–100%.
-- Advanced options: Prevent Display/System Sleep, Force Discharge.
-- Installer flow to install/uninstall the helper daemon with administrator privileges.
 
 ## How It Works
 
