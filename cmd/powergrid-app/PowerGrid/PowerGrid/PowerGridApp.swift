@@ -5,6 +5,7 @@
 //
 //
 // File: PowerGridApp.swift
+
 import SwiftUI
 
 @main
@@ -467,6 +468,7 @@ struct QuickActionsView: View {
                 imageOn: "bolt.slash.fill",             // Icon for discharge active
                 title: "Force Discharge",
                 isOn: $client.userIntent.forceDischarge, // Bind to the REAL state
+                activeTintColor: .red,
                 helpText: client.userIntent.forceDischarge
                     ? "Force discharge"
                     : "Charge normally",
@@ -485,6 +487,7 @@ struct QuickActionsView: View {
                 imageOn: "sun.max.fill",
                 title: "Display Sleep",
                 isOn: $client.userIntent.preventDisplaySleep,
+                activeTintColor: .green,
                 helpText: client.userIntent.preventDisplaySleep
                     ? "Prevents display sleep"
                     : "Allows display sleep",
@@ -503,8 +506,9 @@ struct QuickActionsView: View {
                 imageOn: "lock.fill",         // Icon when the limit is OFF (unlimited)
                 title: "Limit",
                 isOn: limitBinding(),          // Use our custom binding helper
+                activeTintColor: .green,
                 helpText: client.userIntent.chargeLimit >= 100
-                    ? "Charging unlimited (100%)"
+                    ? "No charging limit"
                     : "Charging limited to \(client.userIntent.chargeLimit)%",
                 showsCaption: false,
                 action: nil,                  // The binding handles the action, so none is needed here.
@@ -516,7 +520,7 @@ struct QuickActionsView: View {
                 title: "Icons",
                 isOn: .constant(true),
                 activeTintColor: styleButtonTintColor, // <-- This is now the last parameter
-                helpText: "Cycle menu bar display style (\(styleLabel()))",
+                helpText: "Menu bar (\(styleLabel()))",
                 showsCaption: false,
                 action: { // <-- This is the labeled parameter
                     client.userIntent.menuBarDisplayStyle = client.userIntent.menuBarDisplayStyle.next()
@@ -531,11 +535,11 @@ struct QuickActionsView: View {
     private var styleButtonTintColor: Color {
         switch client.userIntent.menuBarDisplayStyle {
         case .iconAndText:
-            return .blue // The standard, default tint color.
+            return .green // The standard, default tint color.
         case .iconOnly:
-            return .green // A distinct color for the "icon only" state.
+            return .yellow // A distinct color for the "icon only" state.
         case .textOnly:
-            return .orange // A distinct color for the "text only" state.
+            return .red // A distinct color for the "text only" state.
         }
     }
 
