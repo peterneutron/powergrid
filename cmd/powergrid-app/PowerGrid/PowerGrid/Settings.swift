@@ -4,6 +4,8 @@
 //
 //
 //
+// File: Settings.swift
+
 import Foundation
 
 // Defines the possible display styles for the menu bar item.
