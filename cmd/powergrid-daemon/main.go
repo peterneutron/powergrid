@@ -67,11 +67,11 @@ func (s *powerGridServer) GetStatus(_ context.Context, _ *rpc.Empty) (*rpc.Statu
 	}
 
 	resp := &rpc.StatusResponse{
-		CurrentCharge: int32(s.lastIOKitStatus.Battery.CurrentCharge),
-		IsCharging:    s.lastIOKitStatus.State.IsCharging,
-		IsConnected:   s.lastIOKitStatus.State.IsConnected,
-		ChargeLimit:   s.currentLimit,
-		//IsChargeLimited:    s.isChargeLimited,
+		CurrentCharge:      int32(s.lastIOKitStatus.Battery.CurrentCharge),
+		IsCharging:         s.lastIOKitStatus.State.IsCharging,
+		IsConnected:        s.lastIOKitStatus.State.IsConnected,
+		ChargeLimit:        s.currentLimit,
+		IsChargeLimited:    !s.lastSMCStatus.State.IsChargingEnabled,
 		CycleCount:         int32(s.lastIOKitStatus.Battery.CycleCount),
 		AdapterDescription: s.lastIOKitStatus.Adapter.Description,
 		BatteryWattage:     s.lastBatteryWattage,
@@ -106,8 +106,7 @@ func (s *powerGridServer) SetChargeLimit(_ context.Context, req *rpc.SetChargeLi
 	newLimit := req.GetLimit()
 	if newLimit < 60 || newLimit > 100 {
 		logger.Default("Ignoring invalid charge limit: %d", newLimit)
-		s.currentLimit = newLimit
-		s.runChargingLogicLocked(nil)
+		// Simply return. No logic run needed.
 		return &rpc.Empty{}, nil
 	}
 
@@ -115,43 +114,36 @@ func (s *powerGridServer) SetChargeLimit(_ context.Context, req *rpc.SetChargeLi
 	if s.currentConsoleUser == nil {
 		logger.Default("SetChargeLimit requested with no console user; using daemon default %d%%", defaultChargeLimit)
 		s.currentLimit = defaultChargeLimit
-		go s.runChargingLogic(nil)
-		return &rpc.Empty{}, nil
-	}
-
-	u := s.currentConsoleUser
-	// Persist to the user's preferences and update in-memory limit.
-	if err := cfg.WriteUserChargeLimit(u.HomeDir, u.UID, int(newLimit)); err != nil {
-		logger.Error("Failed to persist user charge limit for %s: %v", u.Username, err)
-		// Still update in-memory so UX isn't blocked; it will be reconciled on next read.
 	} else {
-		logger.Default("Persisted user charge limit %d%% for %s", newLimit, u.Username)
+		u := s.currentConsoleUser
+		if err := cfg.WriteUserChargeLimit(u.HomeDir, u.UID, int(newLimit)); err != nil {
+			logger.Error("Failed to persist user charge limit for %s: %v", u.Username, err)
+		} else {
+			logger.Default("Persisted user charge limit %d%% for %s", newLimit, u.Username)
+		}
+		s.currentLimit = newLimit
 	}
-	// Update effective limit snapshot immediately.
-	s.currentLimit = newLimit
 
-	// Trigger an immediate logic check with the new limit (synchronous so UI sees fresh status).
-	s.runChargingLogic(nil)
+	s.runChargingLogicLocked(nil)
 
 	return &rpc.Empty{}, nil
 }
 
 // SetPowerFeature enables or disables application-local power assertions and adapter state.
 func (s *powerGridServer) SetPowerFeature(_ context.Context, req *rpc.SetPowerFeatureRequest) (*rpc.Empty, error) {
+	// Perform actions that don't need the server state lock first.
 	switch req.GetFeature() {
 	case rpc.PowerFeature_PREVENT_DISPLAY_SLEEP:
+		// We can lock just around the state change.
 		s.mu.Lock()
 		s.wantPreventDisplaySleep = req.GetEnable()
 		s.mu.Unlock()
 		if req.GetEnable() {
 			if _, err := powerkit.CreateAssertion(powerkit.AssertionTypePreventDisplaySleep, "PowerGrid: Prevent Display Sleep"); err != nil {
 				logger.Error("Failed to create display sleep assertion: %v", err)
-			} else {
-				logger.Default("Successfully created display sleep assertion.")
 			}
 		} else {
 			powerkit.ReleaseAssertion(powerkit.AssertionTypePreventDisplaySleep)
-			logger.Default("Successfully released display sleep assertion.")
 		}
 	case rpc.PowerFeature_PREVENT_SYSTEM_SLEEP:
 		s.mu.Lock()
@@ -160,34 +152,26 @@ func (s *powerGridServer) SetPowerFeature(_ context.Context, req *rpc.SetPowerFe
 		if req.GetEnable() {
 			if _, err := powerkit.CreateAssertion(powerkit.AssertionTypePreventSystemSleep, "PowerGrid: Prevent System Sleep"); err != nil {
 				logger.Error("Failed to create system sleep assertion: %v", err)
-			} else {
-				logger.Default("Successfully created system sleep assertion.")
 			}
 		} else {
 			powerkit.ReleaseAssertion(powerkit.AssertionTypePreventSystemSleep)
-			logger.Default("Successfully released system sleep assertion.")
 		}
 	case rpc.PowerFeature_FORCE_DISCHARGE:
 		if req.GetEnable() {
 			if err := powerkit.SetAdapterState(powerkit.AdapterActionOff); err != nil {
 				logger.Error("Failed to force discharge (adapter off): %v", err)
-			} else {
-				logger.Default("Successfully disabled adapter (force discharge).")
 			}
 		} else {
 			if err := powerkit.SetAdapterState(powerkit.AdapterActionOn); err != nil {
 				logger.Error("Failed to re-enable adapter: %v", err)
-			} else {
-				logger.Default("Successfully re-enabled adapter.")
 			}
 		}
-	default:
-		// No-op for unspecified/unknown
 	}
 
+	// THE FIX: Now acquire the lock ONCE and call the ...Locked helper.
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.runChargingLogic(nil)
+	s.runChargingLogicLocked(nil)
 	return &rpc.Empty{}, nil
 }
 
@@ -475,7 +459,7 @@ func main() {
 	rpc.RegisterPowerGridServer(grpcServer, server)
 
 	// Run the first logic check immediately on start and start console user watcher.
-	go server.runChargingLogic(nil)
+	// go server.runChargingLogic(nil)
 	server.startConsoleUserEventHandler()
 
 	// Apply initial NoUser safety defaults at boot until a user is detected.
