@@ -39,9 +39,9 @@ var logger = oslogger.NewLogger(logSubsystem, "Daemon")
 type powerGridServer struct {
 	rpc.UnimplementedPowerGridServer
 
-	mu                 sync.RWMutex
-	currentLimit       int32
-	isChargeLimited    bool
+	mu           sync.RWMutex
+	currentLimit int32
+	//isChargeLimited    bool
 	lastIOKitStatus    *powerkit.IOKitData
 	lastSMCStatus      *powerkit.SMCData
 	lastBatteryWattage float32
@@ -67,11 +67,11 @@ func (s *powerGridServer) GetStatus(_ context.Context, _ *rpc.Empty) (*rpc.Statu
 	}
 
 	resp := &rpc.StatusResponse{
-		CurrentCharge:      int32(s.lastIOKitStatus.Battery.CurrentCharge),
-		IsCharging:         s.lastIOKitStatus.State.IsCharging,
-		IsConnected:        s.lastIOKitStatus.State.IsConnected,
-		ChargeLimit:        s.currentLimit,
-		IsChargeLimited:    s.isChargeLimited,
+		CurrentCharge: int32(s.lastIOKitStatus.Battery.CurrentCharge),
+		IsCharging:    s.lastIOKitStatus.State.IsCharging,
+		IsConnected:   s.lastIOKitStatus.State.IsConnected,
+		ChargeLimit:   s.currentLimit,
+		//IsChargeLimited:    s.isChargeLimited,
 		CycleCount:         int32(s.lastIOKitStatus.Battery.CycleCount),
 		AdapterDescription: s.lastIOKitStatus.Adapter.Description,
 		BatteryWattage:     s.lastBatteryWattage,
@@ -106,6 +106,8 @@ func (s *powerGridServer) SetChargeLimit(_ context.Context, req *rpc.SetChargeLi
 	newLimit := req.GetLimit()
 	if newLimit < 60 || newLimit > 100 {
 		logger.Default("Ignoring invalid charge limit: %d", newLimit)
+		s.currentLimit = newLimit
+		s.runChargingLogicLocked(nil)
 		return &rpc.Empty{}, nil
 	}
 
@@ -183,15 +185,22 @@ func (s *powerGridServer) SetPowerFeature(_ context.Context, req *rpc.SetPowerFe
 		// No-op for unspecified/unknown
 	}
 
-	// After changing a feature, update status immediately (synchronous so UI sees fresh status).
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.runChargingLogic(nil)
 	return &rpc.Empty{}, nil
 }
 
-// runChargingLogic is the core decision-making function. It should be triggered on events.
+// CREATE a new public wrapper function that handles locking.
 func (s *powerGridServer) runChargingLogic(info *powerkit.SystemInfo) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.runChargingLogicLocked(info) // Call the internal version
+}
+
+// runChargingLogic is the core decision-making function. It should be triggered on events.
+func (s *powerGridServer) runChargingLogicLocked(info *powerkit.SystemInfo) {
 	var err error
-	// If no info is provided (e.g., on wake-up), fetch the latest.
 	if info == nil {
 		info, err = powerkit.GetSystemInfo()
 		if err != nil {
@@ -199,10 +208,6 @@ func (s *powerGridServer) runChargingLogic(info *powerkit.SystemInfo) {
 			return
 		}
 	}
-
-	// Lock for state updates
-	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	// Preserve SMC snapshot across IOKit-only events so we don't lose adapter/charging state.
 	if info.SMC == nil && s.lastSMCStatus != nil {
@@ -225,26 +230,23 @@ func (s *powerGridServer) runChargingLogic(info *powerkit.SystemInfo) {
 
 	charge := info.IOKit.Battery.CurrentCharge
 	limit := int(s.currentLimit)
-	isChargingSMC := info.SMC.State.IsChargingEnabled
+	isSMCChargingEnabled := info.SMC.State.IsChargingEnabled
 
-	// THE CORE LOGIC
-	// if charge >= limit && isChargingSMC {
-	// Only try to disable charging if we are over the limit, the SMC reports charging is enabled,
-	// AND we don't already believe we are the ones who limited it.
-	if charge >= limit && isChargingSMC && !s.isChargeLimited {
+	// THE NEW, SIMPLER CORE LOGIC
+	if charge >= limit && isSMCChargingEnabled {
+		// We are at or over the limit, and the hardware says charging is ON. Turn it OFF.
 		logger.Default("Charge %d%% >= Limit %d%%. Disabling charging.", charge, limit)
 		if err := powerkit.SetChargingState(powerkit.ChargingActionOff); err != nil {
 			logger.Error("Failed to disable charging: %v", err)
 		} else {
-			s.isChargeLimited = true
 			logger.Default("Successfully disabled charging.")
 		}
-	} else if charge < limit && !isChargingSMC {
+	} else if charge < limit && !isSMCChargingEnabled {
+		// We are under the limit, and the hardware says charging is OFF. Turn it ON.
 		logger.Default("Charge %d%% < Limit %d%%. Re-enabling charging.", charge, limit)
 		if err := powerkit.SetChargingState(powerkit.ChargingActionOn); err != nil {
 			logger.Error("Failed to enable charging: %v", err)
 		} else {
-			s.isChargeLimited = false
 			logger.Default("Successfully enabled charging.")
 		}
 	}
@@ -430,26 +432,15 @@ func (s *powerGridServer) enterConsoleUser(u *consoleuser.ConsoleUser) {
 	go s.runChargingLogic(nil)
 }
 
-// handleSleep is called just before the system sleeps. It unconditionally
-// disables charging to prevent overcharging while asleep.
+// The new, simpler sleep handler.
 func (s *powerGridServer) handleSleep() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	// Only act if charging is not already limited by us.
-	if !s.isChargeLimited {
-		logger.Default("System is going to sleep. Proactively disabling charging.")
-		// Set our internal state to true FIRST. This is our intent.
-		// This ensures that even if the command below fails, the daemon will wake up
-		// in a safe, non-charging state and re-evaluate correctly.
-		s.isChargeLimited = true
-
-		if err := powerkit.SetChargingState(powerkit.ChargingActionOff); err != nil {
-			logger.Error("Failed to disable charging for sleep: %v", err)
-		} else {
-			//s.isChargeLimited = true
-			logger.Default("Successfully disabled charging for sleep.")
-		}
+	logger.Default("System is going to sleep. Proactively disabling charging.")
+	// Just send the command. No need to manage internal state flags.
+	// The wake-up logic will fix everything if this fails.
+	if err := powerkit.SetChargingState(powerkit.ChargingActionOff); err != nil {
+		logger.Error("Failed to disable charging for sleep: %v", err)
+	} else {
+		logger.Default("Successfully disabled charging for sleep.")
 	}
 }
 
