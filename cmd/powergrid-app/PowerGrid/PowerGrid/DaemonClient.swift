@@ -14,7 +14,7 @@ import NIOPosix
 
 struct UserIntent: Equatable {
     // Default values
-    var chargeLimit: Int = 80
+    var chargeLimit: Int = 100
     var preventDisplaySleep: Bool = false
     var preventSystemSleep: Bool = false
     var forceDischarge: Bool = false
@@ -31,10 +31,9 @@ class DaemonClient: ObservableObject {
     // 2. Add a didSet observer to userIntent to automatically save the setting.
     @Published var userIntent = UserIntent() {
         didSet {
-            // This observer fires whenever userIntent is changed.
-            // We check if the display style is what changed, and if so, save it.
+            // THE ONLY THING WE SAVE is the UI display style.
             if userIntent.menuBarDisplayStyle != oldValue.menuBarDisplayStyle {
-                UserDefaults.standard.set(userIntent.menuBarDisplayStyle.rawValue, forKey: AppSettings.menuBarDisplayStyleKey)
+                UserDefaults.standard.set(userIntent.menuBarDisplayStyle.rawValue, forKey: "menuBarDisplayStyle")
                 log("Saved menu bar display style: \(userIntent.menuBarDisplayStyle.rawValue)")
             }
         }
@@ -62,15 +61,15 @@ class DaemonClient: ObservableObject {
     private let group = MultiThreadedEventLoopGroup(numberOfThreads: 1)
     
     init() {
-        // Load the saved display style from UserDefaults.
-        if let savedValue = UserDefaults.standard.string(forKey: AppSettings.menuBarDisplayStyleKey),
+        // Load ONLY the UI-specific setting.
+        if let savedValue = UserDefaults.standard.string(forKey: "menuBarDisplayStyle"),
            let style = MenuBarDisplayStyle(rawValue: savedValue) {
-            // If a value was found, apply it to our initial userIntent.
             self.userIntent.menuBarDisplayStyle = style
             log("Loaded menu bar display style: \(style.rawValue)")
         }
         
-        // Now proceed with the connection.
+        // DO NOT load chargeLimit or other settings. We will get them from the daemon.
+        
         connect()
     }
     
@@ -131,21 +130,22 @@ class DaemonClient: ObservableObject {
             let response = try await client.getStatus(Rpc_Empty())
             self.status = response
             
-            // 4. CRITICAL FIX: Preserve the UI setting when updating state from the daemon.
-            // Create an intent based on the daemon's response...
-            let latestIntentFromServer = UserIntent(
+            // 2. THIS IS THE KEY: Create a new UserIntent from the daemon's response.
+            // The daemon's state IS the user's intent, because the daemon saved it.
+            let intentFromServer = UserIntent(
                 chargeLimit: Int(response.chargeLimit),
                 preventDisplaySleep: response.preventDisplaySleepActive,
                 preventSystemSleep: response.preventSystemSleepActive,
                 forceDischarge: response.forceDischargeActive,
-                // ...but PRESERVE the existing UI preference, which the daemon doesn't know about.
+                // IMPORTANT: Preserve the UI-only setting which the daemon doesn't know about.
                 menuBarDisplayStyle: self.userIntent.menuBarDisplayStyle
             )
-                       
-            // This logic now works perfectly. It compares the daemon-related state
-            // and won't overwrite our UI preference.
-            if self.userIntent != latestIntentFromServer {
-                self.userIntent = latestIntentFromServer
+                    
+            // 3. If the state reported by the daemon is different from what our UI shows,
+            // update the UI to match the daemon. This makes the daemon the source of truth.
+            if self.userIntent != intentFromServer {
+                self.userIntent = intentFromServer
+                log("Synchronized UI intent with daemon status.")
             }
             
             if connectionState != .connected {
@@ -189,6 +189,7 @@ class DaemonClient: ObservableObject {
             print("Error setting limit: \(error)")
         }
         
+        // This is correct. After setting, fetch the truth again.
         await fetchStatus()
     }
 
