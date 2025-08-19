@@ -359,15 +359,24 @@ struct ControlsView: View {
     // We now observe the whole client to access userIntent.
     @ObservedObject var client: DaemonClient
     
+    // --- ADDED: A computed property to handle the display logic ---
+    // This keeps the view's body clean and readable.
+    private var chargeLimitLabelText: String {
+        // If the charge limit is 100 or more, display "Off".
+        if client.userIntent.chargeLimit >= 100 {
+            return "Charge Limit: Off"
+        } else {
+            // Otherwise, display the percentage.
+            return "Charge Limit: \(client.userIntent.chargeLimit)%"
+        }
+    }
+    
     var body: some View {
         VStack(alignment: .leading) {
             HStack {
                 // Read directly from the user's intent.
-                Text("Charge Limit: \(client.userIntent.chargeLimit)%")
+                Text(chargeLimitLabelText)
                 Spacer()
-                // The offBinding now correctly uses the client's intent.
-                Toggle(isOn: offBinding()) { Text("Off:") }
-                    .toggleStyle(.checkbox)
             }
             // This Slider now uses a custom binding to bridge the Double/Int gap
             // and read/write directly to the userIntent.
@@ -390,22 +399,6 @@ extension ControlsView {
         Binding<Double>(
             get: { Double(client.userIntent.chargeLimit) },
             set: { client.userIntent.chargeLimit = Int($0) }
-        )
-    }
-    
-    // The logic here is now simpler, as it just manipulates the userIntent.
-    // The RPC call is handled separately by the Slider's onEditingChanged.
-    func offBinding() -> Binding<Bool> {
-        Binding<Bool>(
-            get: { client.userIntent.chargeLimit >= 100 },
-            set: { isChecked in
-                let newLimit = isChecked ? 100 : 80
-                client.userIntent.chargeLimit = newLimit
-                // Immediately send the update when the checkbox is used.
-                Task {
-                    await client.setLimit(newLimit)
-                }
-            }
         )
     }
 }
