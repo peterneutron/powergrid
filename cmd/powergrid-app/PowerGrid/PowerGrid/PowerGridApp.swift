@@ -256,8 +256,8 @@ struct HeaderView: View {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 4) {
                     let adapterText = status.isConnected
-                        ? (status.adapterDescription.isEmpty ? "Unknown Adapter" : status.adapterDescription)
-                        : "Not connected"
+                        ? "Connected (\(Int(status.adapterMaxWatts)) W)"
+                        : "Disconnected"
                     Text("Adapter: \(adapterText)")
                         .lineLimit(1)
                         .truncationMode(.tail)
