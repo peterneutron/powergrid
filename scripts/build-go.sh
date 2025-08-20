@@ -3,7 +3,6 @@
 # BUILDS THE GO BINARIES
 # =================================================================
 
-# Fail fast on any error
 set -e
 
 echo "--- Building Go Binaries ---"
@@ -27,23 +26,19 @@ if [ -n "$SRCROOT" ]; then
         exit 1
     fi
 
-    # Load the same environment your login shell would
     eval "$(${HB_PREFIX}/bin/brew shellenv)"
 
-    # Verify we can now see ‘go’
     if ! command -v go &> /dev/null; then
         echo "❌ ERROR: 'go' not found. Please run 'brew install go'." >&2
         exit 1
     fi
     echo "✅ Homebrew environment configured. Using 'go' from: $(command -v go)"
 
-    # Compute project root relative to Xcode’s SRCROOT
     PROJECT_ROOT="${SRCROOT}/../../.."
     echo "Using SRCROOT: $SRCROOT (Project Root: $PROJECT_ROOT)"
 else
     echo "🖥 Manual execution detected. Skipping Homebrew setup."
 
-    # Compute project root relative to script file
     SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
     PROJECT_ROOT="${SCRIPT_DIR}/.."
     echo "Calculated Project Root: $PROJECT_ROOT"

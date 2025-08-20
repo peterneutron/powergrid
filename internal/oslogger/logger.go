@@ -1,12 +1,8 @@
-// Change the package declaration from 'main' to 'oslogger'
 package oslogger
 
 /*
-// No LDFLAGS are needed because os_log is part of libSystem,
-// which is linked by default in all macOS executables.
 #include <os/log.h>
 
-// C helpers remain the same...
 static inline os_log_t make_logger(const char* sub, const char* cat) {
   return os_log_create(sub, cat);
 }
@@ -31,10 +27,8 @@ import (
 	"unsafe"
 )
 
-// Logger struct is already exported (starts with a capital letter).
 type Logger struct{ l C.os_log_t }
 
-// NewLogger function is already exported.
 func NewLogger(subsystem, category string) *Logger {
 	cs1 := C.CString(subsystem)
 	defer C.free(unsafe.Pointer(cs1))
@@ -43,7 +37,6 @@ func NewLogger(subsystem, category string) *Logger {
 	return &Logger{C.make_logger(cs1, cs2)}
 }
 
-// Logging methods are already exported.
 func (lg *Logger) Default(format string, a ...any) {
 	msg := fmt.Sprintf(format, a...)
 	cs := C.CString(msg)

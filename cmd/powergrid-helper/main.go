@@ -19,8 +19,6 @@ const (
 	plistInstallPath  = launchDaemonsDir + "/" + plistName
 )
 
-// main is the entry point for the helper.
-// It expects an action ('install' or 'uninstall') and an optional path.
 func main() {
 	log.Println("PowerGrid Helper started.")
 
@@ -56,29 +54,23 @@ func main() {
 	log.Println("PowerGrid Helper finished successfully.")
 }
 
-// install performs the installation steps.
-// It now takes resourcesPath as a parameter.
 func install(resourcesPath string) error {
 	log.Println("--- Starting PowerGrid Daemon Installation ---")
-	// resourcesPath is now passed in as an argument
 
-	// 1. Unload any old version of the service to prevent conflicts
 	if _, err := os.Stat(plistInstallPath); err == nil {
 		log.Println("Unloading existing service...")
 		cmd := exec.Command("launchctl", "unload", plistInstallPath)
 		if output, err := cmd.CombinedOutput(); err != nil {
-			// Log the error but continue, as it might already be unloaded
 			log.Printf("Warning: 'launchctl unload' failed, but continuing. Output: %s", output)
 		}
 	}
 
-	// 2. Install the new daemon binary
 	sourceDaemon := filepath.Join(resourcesPath, daemonName)
 	log.Printf("Copying daemon from %s to %s", sourceDaemon, daemonInstallPath)
 	if err := copyFile(sourceDaemon, daemonInstallPath); err != nil {
 		return fmt.Errorf("could not copy daemon binary: %w", err)
 	}
-	if err := os.Chown(daemonInstallPath, 0, 0); err != nil { // 0:0 is root:wheel
+	if err := os.Chown(daemonInstallPath, 0, 0); err != nil {
 		return fmt.Errorf("could not set daemon ownership: %w", err)
 	}
 	if err := os.Chmod(daemonInstallPath, 0755); err != nil {
@@ -86,7 +78,6 @@ func install(resourcesPath string) error {
 	}
 	log.Println("✅ Daemon binary installed.")
 
-	// 3. Install the new launchd plist
 	sourcePlist := filepath.Join(resourcesPath, plistName)
 	log.Printf("Copying plist from %s to %s", sourcePlist, plistInstallPath)
 	if err := copyFile(sourcePlist, plistInstallPath); err != nil {
@@ -100,7 +91,6 @@ func install(resourcesPath string) error {
 	}
 	log.Println("✅ launchd plist installed.")
 
-	// 4. Load the new service
 	log.Println("Loading new service with launchctl...")
 	cmd := exec.Command("launchctl", "load", plistInstallPath)
 	if output, err := cmd.CombinedOutput(); err != nil {
@@ -112,17 +102,13 @@ func install(resourcesPath string) error {
 	return nil
 }
 
-// uninstall stops the daemon and removes all installed files.
 func uninstall() error {
 	log.Println("--- Starting PowerGrid Daemon Uninstallation ---")
 
-	// 1. Unload the service from launchd.
-	// We check if the file exists before trying to unload it.
 	if _, err := os.Stat(plistInstallPath); err == nil {
 		log.Println("Unloading service...")
 		cmd := exec.Command("launchctl", "unload", plistInstallPath)
 		if output, err := cmd.CombinedOutput(); err != nil {
-			// Log as a warning and continue. The service might not be loaded, which is fine.
 			log.Printf("Warning: 'launchctl unload' failed, but continuing. Output: %s", output)
 		}
 	} else {
@@ -130,15 +116,12 @@ func uninstall() error {
 	}
 	log.Println("✅ Service unloaded.")
 
-	// 2. Remove the launchd plist file.
 	log.Printf("Removing plist: %s", plistInstallPath)
 	if err := os.Remove(plistInstallPath); err != nil && !os.IsNotExist(err) {
-		// We only return an error if it's something other than "file not found".
 		return fmt.Errorf("failed to remove plist file: %w", err)
 	}
 	log.Println("✅ Plist file removed.")
 
-	// 3. Remove the daemon binary.
 	log.Printf("Removing daemon binary: %s", daemonInstallPath)
 	if err := os.Remove(daemonInstallPath); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("failed to remove daemon binary: %w", err)
@@ -149,13 +132,11 @@ func uninstall() error {
 	return nil
 }
 
-// copyFile copies a file from src to dst.
 func copyFile(src, dst string) (err error) {
 	sourceFile, err := os.Open(src)
 	if err != nil {
 		return err
 	}
-	// The 'defer' now includes an error check within a closure.
 	defer func() {
 		if closeErr := sourceFile.Close(); err == nil {
 			err = closeErr
@@ -166,7 +147,6 @@ func copyFile(src, dst string) (err error) {
 	if err != nil {
 		return err
 	}
-	// Same pattern for the destination file.
 	defer func() {
 		if closeErr := destFile.Close(); err == nil {
 			err = closeErr
@@ -177,6 +157,5 @@ func copyFile(src, dst string) (err error) {
 		return err
 	}
 
-	// Finally, sync the file to disk.
 	return destFile.Sync()
 }

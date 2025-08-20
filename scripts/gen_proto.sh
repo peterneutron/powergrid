@@ -13,32 +13,25 @@ set -e
 
 echo "--- Generating gRPC Code ---"
 
-# --- Define Paths ---
-# Get the project root directory (the parent of the 'scripts' directory)
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
 PROJECT_ROOT="${SCRIPT_DIR}/.."
 
-# Define explicit paths for protoc and plugins for reliability
 PROTOC_PATH="/opt/homebrew/bin/protoc"
 SWIFT_PLUGIN_PATH="/opt/homebrew/bin/protoc-gen-swift"
 GRPC_SWIFT_PLUGIN_PATH="/opt/homebrew/bin/protoc-gen-grpc-swift-2"
 
-# Define source and output directories
 PROTO_FILE="${PROJECT_ROOT}/proto/powergrid.proto"
 GO_OUT_DIR="${PROJECT_ROOT}/generated/go"
 SWIFT_OUT_DIR="${PROJECT_ROOT}/generated/swift" # New temporary location
 
-# Verify the core protoc binary exists
 if [ ! -x "$PROTOC_PATH" ]; then
     echo "❌ ERROR: protoc not found at ${PROTOC_PATH}. Please run 'brew install protobuf'." >&2
     exit 1
 fi
 
-# Create all output directories
 mkdir -p "${GO_OUT_DIR}"
 mkdir -p "${SWIFT_OUT_DIR}"
 
-# --- Execute protoc ---
 echo "Compiling ${PROTO_FILE} for Go and Swift..."
 
 "$PROTOC_PATH" \
