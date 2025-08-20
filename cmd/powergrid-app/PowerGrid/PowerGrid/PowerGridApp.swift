@@ -10,27 +10,21 @@ import SwiftUI
 
 @main
 struct PowerGridApp: App {
-    // Creates a single, stable instance of our client for the app's lifecycle.
     @StateObject private var client = DaemonClient()
     
-    // A timer to periodically refresh the status from the daemon.
     let timer = Timer.publish(every: 5, on: .main, in: .common).autoconnect()
 
     var body: some Scene {
         MenuBarExtra {
-            // The view that appears when you click the menu bar icon.
             AppMenuView(client: client)
-                // Fetch status whenever the timer fires, but only if connected.
                 .onReceive(timer) { _ in
                     guard client.connectionState == .connected else { return }
                     Task {
                         await client.fetchStatus()
                     }
                 }
-                // Attempt to connect immediately on launch to determine installer state.
                 
         } label: {
-            // The view for the menu bar icon itself.
             MenuBarLabelView(client: client)
                 .task {
                     client.connect()
@@ -41,12 +35,10 @@ struct PowerGridApp: App {
     }
 }
 
-// A dedicated view for the menu bar label.
 struct MenuBarLabelView: View {
     @ObservedObject var client: DaemonClient
 
     var body: some View {
-        // Use an HStack for reliable layout of text and images in the menu bar.
         HStack(spacing: 2) {
             switch client.installerState {
             case .notInstalled, .failed:
@@ -60,12 +52,9 @@ struct MenuBarLabelView: View {
                 Image(systemName: "arrow.triangle.2.circlepath")
                 
             case .installed:
-                // This entire structure is preserved.
                 switch client.connectionState {
                 case .connected:
                     if let status = client.status {
-                        // --- THE NEW LOGIC IS INJECTED HERE ---
-                        // We switch on the user's preference to decide what to show.
                         switch client.userIntent.menuBarDisplayStyle {
                         case .iconAndText:
                             StatusTextLabel(status: status)
@@ -76,7 +65,6 @@ struct MenuBarLabelView: View {
                             StatusTextLabel(status: status)
                         }
                     } else {
-                        // This fallback is preserved.
                         Text("PG")
                         Image(systemName: "ellipsis")
                     }
@@ -93,27 +81,20 @@ struct MenuBarLabelView: View {
                 Image(systemName: "hourglass")
             }
         }
-        // Remember to apply your global modifiers for color, rendering, etc. here.
     }
 }
 
-// A helper view to render JUST the text portion of the status.
 private struct StatusTextLabel: View {
     let status: Rpc_StatusResponse
     var body: some View {
-        // Using Int() to show a clean percentage without decimals.
         Text("\(Int(status.currentCharge))%")
     }
 }
 
-// A helper view to render JUST the icon portion of the status.
-// THIS CONTAINS ALL OF YOUR CUSTOM LOGIC.
 private struct StatusIconLabel: View {
     let status: Rpc_StatusResponse
 
-    // The logic is moved into a computed property to keep the body clean.
     private var primaryIconName: String {
-        // Your sophisticated "paused" logic is preserved exactly.
         let charge     = Int(status.currentCharge)
         let limit      = Int(status.chargeLimit)
         let nearLimit  = charge >= max(limit - 1, 0)
@@ -123,25 +104,21 @@ private struct StatusIconLabel: View {
                               || (!status.isCharging && charge >= limit)
                               || (nearLimit && trickleish) )
 
-        // The icon choice logic is also preserved.
         return pausedAtLimit
             ? "shield.lefthalf.filled"
             : (status.isCharging ? "bolt.fill" : "bolt.slash.fill")
     }
 
     var body: some View {
-        // The body simply renders the result of our logic.
         Image(systemName: primaryIconName)
     }
 }
 
-// The main view for the dropdown menu.
 struct AppMenuView: View {
     @ObservedObject var client: DaemonClient
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            // Switch the entire view based on the installer state.
             switch client.installerState {
             case .unknown:
                 ProgressView { Text("Checking daemon status...") }
@@ -153,16 +130,12 @@ struct AppMenuView: View {
                 ProgressView { Text("Uninstalling daemon...") }
                 
             case .notInstalled, .failed:
-                // Show the dedicated installation view.
                 InstallationView(client: client)
                 
             case .installed:
-                // When installed, show the main controls view.
-                // We still need to handle connection state here.
                 if client.connectionState == .connected, let status = client.status {
                     MainControlsView(client: client, status: status)
                 } else {
-                    // This covers the case where it's installed but the daemon isn't reachable.
                     VStack {
                         Text("PowerGrid Daemon Not Responding")
                             .font(.headline)
@@ -176,13 +149,10 @@ struct AppMenuView: View {
             }
         }
         .padding(12)
-        .frame(width: 320) // Give the menu a fixed width
+        .frame(width: 320)
     }
 }
 
-// --- Subviews for Readability ---
-
-// NEW: A dedicated view for the installation UI.
 struct InstallationView: View {
     @ObservedObject var client: DaemonClient
     
@@ -217,7 +187,6 @@ struct InstallationView: View {
 }
 
 
-// The original main view, now refactored.
 struct MainControlsView: View {
     @ObservedObject var client: DaemonClient
     let status: Rpc_StatusResponse
@@ -229,11 +198,7 @@ struct MainControlsView: View {
             ControlsView(client: client)
             Divider()
             
-            // --- NEW LAYOUT ---
-            // 1. Add our new Quick Actions grid.
             QuickActionsView(client: client)
-            
-            // 2. Add our new side-by-side footer.
             FooterActionsView(client: client)
         }
     }
@@ -242,39 +207,27 @@ struct MainControlsView: View {
 struct HeaderView: View {
     let status: Rpc_StatusResponse
     
-    /// A computed property to determine the correct status text based on multiple conditions.
     private var computedStatusText: String {
-        // PRIORITY 1 (NEW): The most specific edge case.
-        // Are we connected and charging, but ALREADY ABOVE the limit?
-        // This means we are waiting for the system to discharge to the new, lower limit.
         if status.isConnected && status.isCharging && status.currentCharge > status.chargeLimit && status.chargeLimit < 100 {
             return "404 - Limiter not found!"
         }
-        
-        // PRIORITY 2: Are we paused exactly at the limit?
-        // This is the normal, stable "at limit" state.
+
         if status.isConnected && !status.isCharging && status.currentCharge >= status.chargeLimit && status.chargeLimit < 100 {
             return "Paused at \(status.chargeLimit)%"
         }
-        
-        // PRIORITY 3: Is the device actively charging towards the limit?
-        // This is the standard "charging in progress" state.
+  
         if status.isCharging {
             return "Charging to \(status.chargeLimit)%"
         }
-        
-        // PRIORITY 4: Is the device plugged in and effectively full?
-        // This handles the case where the limit is 100% and we've reached it.
+  
         if status.isConnected && status.currentCharge >= 99 {
             return "Fully Charged"
         }
         
-        // PRIORITY 5 (Fallback): If none of the above, it's not charging (e.g., unplugged).
         return "Not Charging"
     }
     
     var body: some View {
-        // Title left, Charge on the right (Health/Cycles moved below)
         HStack(alignment: .firstTextBaseline) {
             Text("PowerGrid").font(.title).bold()
             Spacer()
@@ -287,11 +240,8 @@ struct HeaderView: View {
             .font(.title3).bold()
         }
         
-        // This VStack now contains the main status and our new HStacks.
         VStack(alignment: .leading, spacing: 8) {
-            // First row of info
             HStack(alignment: .top) {
-                // THE FIX: Use our new computed property here.
                 Text("Status: \(computedStatusText)")
                 
                 Spacer()
@@ -303,7 +253,6 @@ struct HeaderView: View {
             
             Divider().padding(.vertical, 2)
             
-            // Second row: left shows adapter description + Voltage/Amperage (stacked), right keeps metrics.
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 4) {
                     let adapterText = status.isConnected
@@ -312,7 +261,6 @@ struct HeaderView: View {
                     Text("Adapter: \(adapterText)")
                         .lineLimit(1)
                         .truncationMode(.tail)
-                    // Align values and unit symbols in a 3-column grid: Label | Value | Unit
                     Grid(alignment: .leading, horizontalSpacing: 6) {
                         GridRow {
                             Text("Voltage:")
@@ -356,17 +304,12 @@ struct HeaderView: View {
 }
 
 struct ControlsView: View {
-    // We now observe the whole client to access userIntent.
     @ObservedObject var client: DaemonClient
     
-    // --- ADDED: A computed property to handle the display logic ---
-    // This keeps the view's body clean and readable.
     private var chargeLimitLabelText: String {
-        // If the charge limit is 100 or more, display "Off".
         if client.userIntent.chargeLimit >= 100 {
             return "Charge Limit: Off"
         } else {
-            // Otherwise, display the percentage.
             return "Charge Limit: \(client.userIntent.chargeLimit)%"
         }
     }
@@ -374,14 +317,10 @@ struct ControlsView: View {
     var body: some View {
         VStack(alignment: .leading) {
             HStack {
-                // Read directly from the user's intent.
                 Text(chargeLimitLabelText)
                 Spacer()
             }
-            // This Slider now uses a custom binding to bridge the Double/Int gap
-            // and read/write directly to the userIntent.
             Slider(value: chargeLimitBinding(), in: 60...100, step: 10) {
-                // onEditingChanged is used to send the RPC call ONLY when the user is done.
             } onEditingChanged: { isEditing in
                 if !isEditing {
                     Task {
@@ -394,7 +333,6 @@ struct ControlsView: View {
 }
 
 extension ControlsView {
-    // This helper creates a Binding<Double> from our client's userIntent.chargeLimit (Int).
     private func chargeLimitBinding() -> Binding<Double> {
         Binding<Double>(
             get: { Double(client.userIntent.chargeLimit) },
@@ -403,15 +341,11 @@ extension ControlsView {
     }
 }
 
-// This new, dedicated view handles the display of all wattage metrics.
 struct PowerMetricsView: View {
     let status: Rpc_StatusResponse
 
     var body: some View {
-        // A Grid is the perfect tool for aligning columns of text.
-        // Use three columns: Label | Value | Unit with tight spacing.
         Grid(alignment: .leading, horizontalSpacing: 6) {
-            // Row 1: System Wattage
             GridRow {
                 Text("System:")
                 Text(formatWattage(status.systemWattage, showSign: false))
@@ -420,36 +354,32 @@ struct PowerMetricsView: View {
                 Text("W").foregroundColor(.primary)
             }
 
-            // Row 2: Adapter Wattage
             GridRow {
                 Text("Adapter:")
                 Text(formatWattage(status.adapterWattage, showSign: true))
                     .monospacedDigit()
-                    .foregroundColor(.green) // Color only the numeric value
+                    .foregroundColor(.green)
                     .gridColumnAlignment(.trailing)
                 Text("W").foregroundColor(.primary)
             }
 
-            // Row 3: Battery Wattage
             GridRow {
                 Text("Battery:")
                 Text(formatWattage(status.batteryWattage, showSign: true))
                     .monospacedDigit()
-                    .foregroundColor(status.batteryWattage >= 0 ? .green : .red) // Color only the numeric value
+                    .foregroundColor(status.batteryWattage >= 0 ? .green : .red)
                     .gridColumnAlignment(.trailing)
                 Text("W").foregroundColor(.primary)
             }
         }
     }
 
-    /// Formats wattage value with optional sign and one decimal place (no unit).
     private func formatWattage(_ value: Float, showSign: Bool) -> String {
         let formatString = showSign ? "%+.1f" : "%.1f"
         return String(format: formatString, value)
     }
 }
 
-// A new view to hold the grid of Quick Action buttons.
 struct QuickActionsView: View {
     @ObservedObject var client: DaemonClient
     
@@ -457,10 +387,10 @@ struct QuickActionsView: View {
         let columns = [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())]
         LazyVGrid(columns: columns, spacing: 16) {
             QuickActionButton(
-                imageOff: "bolt.fill",                  // Icon for normal state
-                imageOn: "bolt.slash.fill",             // Icon for discharge active
+                imageOff: "bolt.fill",
+                imageOn: "bolt.slash.fill",
                 title: "Force Discharge",
-                isOn: $client.userIntent.forceDischarge, // Bind to the REAL state
+                isOn: $client.userIntent.forceDischarge,
                 activeTintColor: .red,
                 helpText: client.userIntent.forceDischarge
                     ? "Force discharge"
@@ -495,16 +425,16 @@ struct QuickActionsView: View {
             }
             
             QuickActionButton(
-                imageOff: "infinity",       // Icon when a limit IS active
-                imageOn: "lock.fill",         // Icon when the limit is OFF (unlimited)
+                imageOff: "infinity",
+                imageOn: "lock.fill",
                 title: "Limit",
-                isOn: limitBinding(),          // Use our custom binding helper
+                isOn: limitBinding(),
                 activeTintColor: .green,
                 helpText: client.userIntent.chargeLimit >= 100
                     ? "No charging limit"
                     : "Charging limited to \(client.userIntent.chargeLimit)%",
                 showsCaption: false,
-                action: nil,                  // The binding handles the action, so none is needed here.
+                action: nil,
             )
             
             QuickActionButton(
@@ -512,27 +442,26 @@ struct QuickActionsView: View {
                 imageOn: nil,
                 title: "Icons",
                 isOn: .constant(true),
-                activeTintColor: styleButtonTintColor, // <-- This is now the last parameter
+                activeTintColor: styleButtonTintColor,
                 helpText: "Menu bar (\(styleLabel()))",
                 showsCaption: false,
-                action: { // <-- This is the labeled parameter
+                action: {
                     client.userIntent.menuBarDisplayStyle = client.userIntent.menuBarDisplayStyle.next()
                 },
             )
-            .id(client.userIntent.menuBarDisplayStyle.rawValue) // <-- This is still essential
+            .id(client.userIntent.menuBarDisplayStyle.rawValue)
         }
         .padding(.vertical, 4)
     }
     
-    // This computed property returns a different color for each display style.
     private var styleButtonTintColor: Color {
         switch client.userIntent.menuBarDisplayStyle {
         case .iconAndText:
-            return .green // The standard, default tint color.
+            return .green
         case .iconOnly:
-            return .yellow // A distinct color for the "icon only" state.
+            return .yellow
         case .textOnly:
-            return .red // A distinct color for the "text only" state.
+            return .red
         }
     }
 
@@ -545,7 +474,6 @@ struct QuickActionsView: View {
         }
     }
     
-    // This helper function returns the correct icon name for the current display style.
     private func styleIconName() -> String {
         switch client.userIntent.menuBarDisplayStyle {
         case .iconAndText: return "1.circle"
@@ -553,14 +481,11 @@ struct QuickActionsView: View {
         case .textOnly:    return "3.circle"
         }
     }
-    // This helper function creates the binding that mirrors the Toggle's behavior.
-    // It reads from and writes to the client's userIntent.
-    // Rename for clarity:
     private func limitBinding() -> Binding<Bool> {
         Binding<Bool>(
-            get: { client.userIntent.chargeLimit < 100 },   // true when LIMITED
+            get: { client.userIntent.chargeLimit < 100 },
             set: { turnOn in
-                let newLimit = turnOn ? 80 : 100            // on = limited (e.g. 80%), off = unlimited
+                let newLimit = turnOn ? 80 : 100
                 client.userIntent.chargeLimit = newLimit
                 Task { await client.setLimit(newLimit) }
             }
@@ -568,7 +493,6 @@ struct QuickActionsView: View {
     }
 }
 
-// A new footer that arranges the Advanced Options and Quit button side-by-side.
 struct FooterActionsView: View {
     @ObservedObject var client: DaemonClient
     
@@ -579,7 +503,6 @@ struct FooterActionsView: View {
 
             HStack {
                 Menu("Advanced Options") {
-                    // All the previous options from FooterView go here.
                     Toggle("Prevent Display Sleep", isOn: $client.userIntent.preventDisplaySleep)
                         .onChange(of: client.userIntent.preventDisplaySleep) { _, newValue in
                             Task { await client.setPowerFeature(feature: .preventDisplaySleep, enable: newValue) }
@@ -619,8 +542,7 @@ struct FooterActionsView: View {
                         NSWorkspace.shared.openApplication(at: consoleURL, configuration: config)
                     }
                 }
-                // .menuStyle(.borderlessButton)
-                .frame(maxWidth: .infinity, alignment: .leading) // This makes it take up the 2/3 space.
+                .frame(maxWidth: .infinity, alignment: .leading)
 
                 Button("Quit") {
                     Task { await MainActor.run { NSApplication.shared.terminate(nil) } }

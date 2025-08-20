@@ -20,15 +20,15 @@ enum Haptics {
 struct QuickActionButton: View {
     let imageOff: String
     let imageOn: String?
-    let title: String?                 // keep for semantics + default tooltip
+    let title: String?
     @Binding var isOn: Bool
     var size: CGFloat = 48
     var enableHaptics: Bool = true
     var activeTintColor: Color? = nil
 
     // NEW:
-    var helpText: String? = nil        // custom tooltip text
-    var showsCaption: Bool = false     // hide label by default
+    var helpText: String? = nil
+    var showsCaption: Bool = false
     var accessibilityLabelText: String? = nil
     var action: (() -> Void)? = nil
 
@@ -49,7 +49,7 @@ struct QuickActionButton: View {
                     .frame(width: size, height: size)
                     .contentShape(Circle())
             }
-            .help(helpText ?? title ?? currentImage) // tooltip
+            .help(helpText ?? title ?? currentImage)
             .accessibilityLabel(Text(accessibilityLabelText ?? title ?? currentImage))
             .accessibilityValue(Text(isOn ? "On" : "Off"))
             .buttonStyle(
@@ -78,8 +78,6 @@ struct CircleToggleStyle: ButtonStyle {
     var isOn: Bool
     var hovering: Bool
     var size: CGFloat
-    // We default it to .tint so existing buttons that don't provide
-    // a color will continue to work as they did before.
     var tintColor: Color = .accentColor
 
     func makeBody(configuration: Configuration) -> some View {
@@ -90,22 +88,18 @@ struct CircleToggleStyle: ButtonStyle {
             .animation(.spring(response: 0.22, dampingFraction: 0.85), value: pressed)
             .animation(.spring(response: 0.28, dampingFraction: 0.9), value: hovering)
 
-            // Use Color for consistent ShapeStyle type:
             .foregroundStyle(isOn ? tintColor : Color.primary.opacity(0.85))
 
             .background(
                 ZStack {
-                    // Frosted background
                     Circle().fill(.thinMaterial)
 
-                    // Active fill tint
                     if isOn {
                         Circle()
                             .fill(tintColor.opacity(0.22)) // Use the property
                             .transition(.opacity)
                     }
 
-                    // Subtle inner line
                     Circle()
                         .strokeBorder(Color.white.opacity(0.25), lineWidth: 0.5)
                         .blur(radius: 0.5)
@@ -113,50 +107,16 @@ struct CircleToggleStyle: ButtonStyle {
                 }
             )
 
-            // Accent ring — again, Color to avoid ShapeStyle mixing
             .overlay(
                 Circle()
-                    .strokeBorder(isOn ? tintColor : .secondary.opacity(0.35), // Use the property
+                    .strokeBorder(isOn ? tintColor : .secondary.opacity(0.35),
                                   lineWidth: isOn ? 1.6 : 1)
                     .opacity(hovering ? 1 : 0.8)
             )
 
-            // Proper shadow overload (with color) to set y-offset
             .shadow(color: .black.opacity(0.25),
                     radius: hovering ? 6 : 3, x: 0, y: hovering ? 2 : 1)
             .shadow(color: .black.opacity(0.001), radius: pressed ? 0 : 0.001)
             .contentShape(Circle())
     }
 }
-
-// MARK: - Demo
-// struct QuickActionDemo: View {
-//    @State private var wifi = true
-//    @State private var bt = false
-//    @State private var airdrop = false
-//    @State private var focus = false
-//
-//    var body: some View {
-//        VStack(alignment: .leading, spacing: 14) {
-//            Text("Quick Actions").font(.headline)
-//
-//            let columns = [GridItem(.fixed(80)), GridItem(.fixed(80)),
-//                           GridItem(.fixed(80)), GridItem(.fixed(80))]
-//            LazyVGrid(columns: columns, alignment: .leading, spacing: 18) {
-//                QuickActionButton(systemImage: "wifi", title: "Wi-Fi", isOn: $wifi)
-//                QuickActionButton(systemImage: "bonjour", title: "AirDrop", isOn: $airdrop)
-//                QuickActionButton(systemImage: "dot.radiowaves.left.and.right", title: "Bluetooth", isOn: $bt)
-//                QuickActionButton(systemImage: "moon.fill", title: "Focus", isOn: $focus)
-//            }
-//            .padding(.top, 4)
-//        }
-//        .padding(16)
-//        .frame(minWidth: 360)
-//    }
-//}
-//
-//#Preview {
-//    QuickActionDemo()
-//        .frame(width: 380)
-//        .environment(\.colorScheme, .dark)
-//}
