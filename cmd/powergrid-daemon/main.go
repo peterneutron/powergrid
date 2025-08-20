@@ -58,6 +58,7 @@ func (s *powerGridServer) GetStatus(_ context.Context, _ *rpc.Empty) (*rpc.Statu
 		IsChargeLimited:           !s.lastSMCStatus.State.IsChargingEnabled,
 		CycleCount:                int32(s.lastIOKitStatus.Battery.CycleCount),
 		AdapterDescription:        s.lastIOKitStatus.Adapter.Description,
+		AdapterMaxWatts:           int32(s.lastIOKitStatus.Adapter.MaxWatts),
 		BatteryWattage:            s.lastBatteryWattage,
 		AdapterWattage:            s.lastAdapterWattage,
 		SystemWattage:             s.lastSystemWattage,

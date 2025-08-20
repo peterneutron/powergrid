@@ -1,6 +1,5 @@
 syntax = "proto3";
 
-// The package path should reflect your module structure.
 package rpc;
 option go_package = "powergrid/internal/rpc";
 
@@ -23,8 +22,6 @@ message StatusResponse {
   float battery_wattage = 8;
   float adapter_wattage = 9;
   float system_wattage = 10;
-
-  // Added fields
   int32 health_by_max = 11;               // IOKit.Calculations.HealthByMaxCapacity
   float adapter_input_voltage = 12;       // IOKit.Adapter.InputVoltage (V)
   float adapter_input_amperage = 13;      // IOKit.Adapter.InputAmperage (A)
@@ -33,6 +30,7 @@ message StatusResponse {
   bool force_discharge_active = 16;       // Adapter disabled via SMC
   bool smc_charging_enabled = 17;         // SMC.State.IsChargingEnabled
   bool smc_adapter_enabled = 18;          // SMC.State.IsAdapterEnabled
+  int32 adapter_max_watts = 19;           // IOKit.Adapter.MaxWatts (W)
 }
 
 message SetChargeLimitRequest {
