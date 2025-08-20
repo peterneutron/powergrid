@@ -19,6 +19,7 @@ import (
 
 var notificationChannel = make(chan struct{}, 1)
 
+//export consoleUserChangedCallback
 func consoleUserChangedCallback(store C.SCDynamicStoreRef, changedKeys C.CFArrayRef, info unsafe.Pointer) {
 	select {
 	case notificationChannel <- struct{}{}:
