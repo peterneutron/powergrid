@@ -1,23 +1,16 @@
 # Makefile for PowerGrid
 
-# --- Configuration ---
 PROJECT_NAME = PowerGrid
 PROJECT_PATH = ./cmd/powergrid-app/PowerGrid
 SCHEME_NAME = Release
 PROTO_SCRIPT = ./scripts/gen_proto.sh
 EXPORT_OPTIONS_PLIST = ./ExportOptions.plist
-
-# Define Swift file paths
 GENERATED_SWIFT_DIR = ./generated/swift
 TARGET_SWIFT_DIR = ./cmd/powergrid-app/PowerGrid/${PROJECT_NAME}/internal/rpc
 
 # --- Main Targets ---
 
-# Default target builds everything
 all: release
-
-# The 'build_app' target now depends on the 'proto' target.
-# This ensures 'make proto' is always run before 'make build_app'.
 
 release: proto
 	@echo "--> Archiving PowerGrid.app for distribution..."
@@ -26,7 +19,6 @@ release: proto
 
 # --- Helper Targets ---
 
-# This target orchestrates the code generation and file copying.
 proto:
 	@echo "--> Running protobuf generation script..."
 	@bash ${PROTO_SCRIPT}
