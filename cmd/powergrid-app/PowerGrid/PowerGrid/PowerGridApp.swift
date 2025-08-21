@@ -490,9 +490,9 @@ struct QuickActionsView: View {
     
     private func styleIconName() -> String {
         switch client.userIntent.menuBarDisplayStyle {
-        case .iconAndText: return "1.circle"
-        case .iconOnly:    return "2.circle"
-        case .textOnly:    return "3.circle"
+        case .iconAndText: return "circle.grid.2x1.fill"
+        case .iconOnly:    return "circle.grid.2x1.left.filled"
+        case .textOnly:    return "circle.grid.2x1.right.filled"
         }
     }
     private func limitBinding() -> Binding<Bool> {
