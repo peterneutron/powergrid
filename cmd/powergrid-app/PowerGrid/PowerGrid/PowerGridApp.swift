@@ -193,7 +193,7 @@ struct MainControlsView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HeaderView(status: status)
+            HeaderView(status: status, displayStyle: client.userIntent.menuBarDisplayStyle)
             Divider()
             ControlsView(client: client)
             Divider()
@@ -206,6 +206,7 @@ struct MainControlsView: View {
 
 struct HeaderView: View {
     let status: Rpc_StatusResponse
+    let displayStyle: MenuBarDisplayStyle
     
     private var computedStatusText: String {
         if status.isConnected && status.isCharging && status.currentCharge > status.chargeLimit && status.chargeLimit < 100 {
@@ -233,9 +234,11 @@ struct HeaderView: View {
             Spacer()
             HStack(spacing: 4) {
                 Text("")
-                Text("\(status.currentCharge)%")
-                    .foregroundColor(chargeColor())
-                    .monospacedDigit()
+                if displayStyle == .iconOnly {
+                    Text("\(status.currentCharge)%")
+                        .foregroundColor(chargeColor())
+                        .monospacedDigit()
+                }
             }
             .font(.title3).bold()
         }
