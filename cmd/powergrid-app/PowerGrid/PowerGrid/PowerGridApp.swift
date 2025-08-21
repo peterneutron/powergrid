@@ -517,10 +517,10 @@ struct FooterActionsView: View {
 
             HStack {
                 Menu("Advanced Options") {
-                    Toggle("Prevent Display Sleep", isOn: $client.userIntent.preventDisplaySleep)
-                        .onChange(of: client.userIntent.preventDisplaySleep) { _, newValue in
-                            Task { await client.setPowerFeature(feature: .preventDisplaySleep, enable: newValue) }
-                        }
+                    //Toggle("Prevent Display Sleep", isOn: $client.userIntent.preventDisplaySleep)
+                    //    .onChange(of: client.userIntent.preventDisplaySleep) { _, newValue in
+                    //        Task { await client.setPowerFeature(feature: .preventDisplaySleep, enable: newValue) }
+                    //    }
                     
                     VStack(alignment: .leading) {
                         Toggle("Prevent System Sleep", isOn: $client.userIntent.preventSystemSleep)
@@ -534,10 +534,16 @@ struct FooterActionsView: View {
                         }
                     }
                     
-                    Toggle("Force Discharge", isOn: $client.userIntent.forceDischarge)
-                        .onChange(of: client.userIntent.forceDischarge) { _, newValue in
-                            Task { await client.setPowerFeature(feature: .forceDischarge, enable: newValue) }
-                        }
+                    //Toggle("Force Discharge", isOn: $client.userIntent.forceDischarge)
+                    //    .onChange(of: client.userIntent.forceDischarge) { _, newValue in
+                    //        Task { await client.setPowerFeature(feature: .forceDischarge, enable: newValue) }
+                    //    }
+                    
+                    Button("View Daemon Logs in Console") {
+                        guard let consoleURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.Console") else { return }
+                        let config = NSWorkspace.OpenConfiguration()
+                        NSWorkspace.shared.openApplication(at: consoleURL, configuration: config)
+                    }
                     
                     Divider()
                     
@@ -548,12 +554,6 @@ struct FooterActionsView: View {
                         }
                     } label: {
                         Text("Uninstall Daemon").foregroundColor(.red)
-                    }
-                    
-                    Button("View Daemon Logs in Console...") {
-                        guard let consoleURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.Console") else { return }
-                        let config = NSWorkspace.OpenConfiguration()
-                        NSWorkspace.shared.openApplication(at: consoleURL, configuration: config)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
