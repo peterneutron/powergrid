@@ -12,11 +12,17 @@ import GRPCNIOTransportHTTP2Posix
 import GRPCProtobuf
 import NIOPosix
 
+enum ForceDischargeMode: String, Equatable {
+    case off
+    case on
+    case auto
+}
+
 struct UserIntent: Equatable {
     var chargeLimit: Int = 100
     var preventDisplaySleep: Bool = false
     var preventSystemSleep: Bool = false
-    var forceDischarge: Bool = false
+    var forceDischargeMode: ForceDischargeMode = .off
     var menuBarDisplayStyle: MenuBarDisplayStyle = .iconAndText
 }
     
@@ -54,6 +60,7 @@ struct UserIntent: Equatable {
         private var transport: HTTP2ClientTransport.Posix?
         private var rawGRPCClient: GRPCClient<HTTP2ClientTransport.Posix>?
         private let group = MultiThreadedEventLoopGroup(numberOfThreads: 1)
+        private var appliedStartupSafety = false
         
         init() {
             if let savedValue = UserDefaults.standard.string(forKey: "menuBarDisplayStyle"),
@@ -112,12 +119,29 @@ struct UserIntent: Equatable {
             do {
                 let response = try await client.getStatus(Rpc_Empty())
                 self.status = response
+
+                // Safety on launch: do not carry forced discharge across app restarts.
+                if !appliedStartupSafety {
+                    appliedStartupSafety = true
+                    if response.forceDischargeActive {
+                        Task { await self.setPowerFeature(feature: .forceDischarge, enable: false) }
+                    }
+                }
                 
+                // Keep user's selected tri-state mode for force discharge when in .auto.
+                // Otherwise, mirror the daemon's active state.
+                let newFDMode: ForceDischargeMode = {
+                    if self.userIntent.forceDischargeMode == .auto {
+                        return .auto
+                    }
+                    return response.forceDischargeActive ? .on : .off
+                }()
+
                 let intentFromServer = UserIntent(
                     chargeLimit: Int(response.chargeLimit),
                     preventDisplaySleep: response.preventDisplaySleepActive,
                     preventSystemSleep: response.preventSystemSleepActive,
-                    forceDischarge: response.forceDischargeActive,
+                    forceDischargeMode: newFDMode,
                     menuBarDisplayStyle: self.userIntent.menuBarDisplayStyle
                 )
                 
@@ -126,6 +150,13 @@ struct UserIntent: Equatable {
                     log("Synchronized UI intent with daemon status.")
                 }
                 
+                // If user selected Auto, automatically disable forced discharge at/below 20%.
+                if self.userIntent.forceDischargeMode == .auto,
+                   response.currentCharge <= 20,
+                   response.forceDischargeActive {
+                    await self.setPowerFeature(feature: .forceDischarge, enable: false)
+                }
+
                 if connectionState != .connected {
                     connectionState = .connected
                     installerState = .installed

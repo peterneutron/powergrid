@@ -120,3 +120,74 @@ struct CircleToggleStyle: ButtonStyle {
             .contentShape(Circle())
     }
 }
+
+// MARK: - TriStateQuickActionButton
+struct TriStateQuickActionButton: View {
+    let imageOff: String
+    let imageOn: String
+    let imageAuto: String
+    let title: String?
+    @Binding var mode: ForceDischargeMode
+    var size: CGFloat = 48
+    var enableHaptics: Bool = true
+    var activeTintColor: Color? = .red
+    var helpText: String? = nil
+    var showsCaption: Bool = false
+    var accessibilityLabelText: String? = nil
+    var action: ((ForceDischargeMode) -> Void)? = nil
+
+    @State private var hovering = false
+
+    private var currentImage: String {
+        switch mode {
+        case .off:  return imageOff
+        case .on:   return imageOn
+        case .auto: return imageAuto
+        }
+    }
+
+    var body: some View {
+        let isActive = mode != .off
+
+        VStack(spacing: showsCaption ? 8 : 0) {
+            Button {
+                // Cycle: off -> on -> auto -> off
+                switch mode {
+                case .off:  mode = .on
+                case .on:   mode = .auto
+                case .auto: mode = .off
+                }
+                action?(mode)
+                if enableHaptics { Haptics.tap() }
+            } label: {
+                Image(systemName: currentImage)
+                    .font(.system(size: size * 0.42, weight: .semibold))
+                    .symbolRenderingMode(.hierarchical)
+                    .frame(width: size, height: size)
+                    .contentShape(Circle())
+            }
+            .help(helpText ?? title ?? currentImage)
+            .accessibilityLabel(Text(accessibilityLabelText ?? title ?? currentImage))
+            .accessibilityValue(Text({
+                switch mode { case .off: return "Off"; case .on: return "On"; case .auto: return "Auto" }
+            }()))
+            .buttonStyle(
+                CircleToggleStyle(
+                    isOn: isActive,
+                    hovering: hovering,
+                    size: size,
+                    tintColor: activeTintColor ?? .red
+                )
+            )
+
+            if showsCaption, let title {
+                Text(title)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .frame(width: size * 1.35)
+            }
+        }
+        .onHover { hovering = $0 }
+    }
+}
