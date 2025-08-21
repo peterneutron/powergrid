@@ -232,7 +232,7 @@ struct HeaderView: View {
             Text("PowerGrid").font(.title).bold()
             Spacer()
             HStack(spacing: 4) {
-                Text("Charge:")
+                Text("")
                 Text("\(status.currentCharge)%")
                     .foregroundColor(chargeColor())
                     .monospacedDigit()
@@ -242,12 +242,20 @@ struct HeaderView: View {
         
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .top) {
-                Text("Status: \(computedStatusText)")
+                Text("\(computedStatusText)")
                 
                 Spacer()
-                VStack(alignment: .trailing, spacing: 2) {
-                    Text("Health: \(status.healthByMax)%")
-                    Text("Cycles: \(status.cycleCount)")
+                HStack(spacing: 10) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "cross.circle.fill")
+                        Text("\(status.healthByMax)%")
+                            .monospacedDigit()
+                    }
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.trianglehead.2.clockwise")
+                        Text("\(status.cycleCount)")
+                            .monospacedDigit()
+                    }
                 }
             }
             
@@ -256,27 +264,33 @@ struct HeaderView: View {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 4) {
                     let adapterText = status.isConnected
-                        ? "Connected (\(Int(status.adapterMaxWatts)) W)"
-                        : "Disconnected"
-                    Text("Adapter: \(adapterText)")
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                    Grid(alignment: .leading, horizontalSpacing: 6) {
+                    ? "Connected"
+                    : "Disconnected"
+                    Grid(alignment: .leading, horizontalSpacing: 4) {
                         GridRow {
-                            Text("Voltage:")
-                            Text(formatSigned(status.adapterInputVoltage))
+                            Text("Adapter:")
+                            Text("\(adapterText)")
                                 .monospacedDigit()
-                                .foregroundColor(status.adapterInputVoltage >= 0 ? .green : .red)
                                 .gridColumnAlignment(.trailing)
-                            Text("V").foregroundColor(.primary)
+                            Text(status.isConnected ? "(\(Int(status.adapterMaxWatts)) W)" : "").foregroundColor(.primary)
                         }
-                        GridRow {
-                            Text("Amperage:")
-                            Text(formatSigned(status.adapterInputAmperage))
-                                .monospacedDigit()
-                                .foregroundColor(status.adapterInputAmperage >= 0 ? .green : .red)
-                                .gridColumnAlignment(.trailing)
-                            Text("A").foregroundColor(.primary)
+                        Grid(alignment: .leading, horizontalSpacing: 6) {
+                            GridRow {
+                                Text("Voltage:")
+                                Text(formatSigned(status.adapterInputVoltage))
+                                    .monospacedDigit()
+                                    .foregroundColor(status.adapterInputVoltage >= 0 ? .green : .red)
+                                    .gridColumnAlignment(.trailing)
+                                Text("V").foregroundColor(.primary)
+                            }
+                            GridRow {
+                                Text("Current:")
+                                Text(formatSigned(status.adapterInputAmperage))
+                                    .monospacedDigit()
+                                    .foregroundColor(status.adapterInputAmperage >= 0 ? .green : .red)
+                                    .gridColumnAlignment(.trailing)
+                                Text("A").foregroundColor(.primary)
+                            }
                         }
                     }
                 }
@@ -308,9 +322,9 @@ struct ControlsView: View {
     
     private var chargeLimitLabelText: String {
         if client.userIntent.chargeLimit >= 100 {
-            return "Charge Limit: Off"
+            return "Limit: Off"
         } else {
-            return "Charge Limit: \(client.userIntent.chargeLimit)%"
+            return "Limit: \(client.userIntent.chargeLimit)%"
         }
     }
     
