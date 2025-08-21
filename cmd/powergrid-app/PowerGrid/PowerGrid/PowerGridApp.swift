@@ -400,22 +400,34 @@ struct QuickActionsView: View {
     var body: some View {
         let columns = [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())]
         LazyVGrid(columns: columns, spacing: 16) {
-            QuickActionButton(
+            TriStateQuickActionButton(
                 imageOff: "bolt.fill",
-                imageOn: "bolt.slash.fill",
+                imageOn: "bolt.badge.xmark.fill",
+                imageAuto: "bolt.badge.automatic.fill",
                 title: "Force Discharge",
-                isOn: $client.userIntent.forceDischarge,
+                mode: $client.userIntent.forceDischargeMode,
+                size: 48,
+                enableHaptics: true,
                 activeTintColor: .red,
-                helpText: client.userIntent.forceDischarge
-                    ? "Force discharge"
-                    : "Charge normally",
+                helpText: {
+                    switch client.userIntent.forceDischargeMode {
+                    case .off:  return "Charge normally"
+                    case .on:   return "Force discharge"
+                    case .auto: return "Auto: Disable at 20%"
+                    }
+                }(),
                 showsCaption: false
-            ) {
+            ) { newMode in
                 Task {
-                    await client.setPowerFeature(
-                        feature: .forceDischarge,
-                        enable: client.userIntent.forceDischarge
-                    )
+                    switch newMode {
+                    case .off:
+                        await client.setPowerFeature(feature: .forceDischarge, enable: false)
+                    case .on:
+                        await client.setPowerFeature(feature: .forceDischarge, enable: true)
+                    case .auto:
+                        // Enable now; DaemonClient will auto-disable at <= 20%
+                        await client.setPowerFeature(feature: .forceDischarge, enable: true)
+                    }
                 }
             }
             
