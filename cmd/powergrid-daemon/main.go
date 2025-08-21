@@ -250,6 +250,14 @@ func (s *powerGridServer) startEventStream() {
 			logger.Info("Received a battery status update, running charging logic.")
 			if event.Info != nil {
 				s.runChargingLogic(event.Info)
+			} else {
+				s.runChargingLogic(nil)
+			}
+		default:
+			if event.Info != nil {
+				s.runChargingLogic(event.Info)
+			} else {
+				s.runChargingLogic(nil)
 			}
 		}
 	}
@@ -400,6 +408,14 @@ func main() {
 	server.startConsoleUserEventHandler()
 
 	go server.startEventStream()
+
+	go func() {
+		ticker := time.NewTicker(15 * time.Second)
+		defer ticker.Stop()
+		for range ticker.C {
+			server.runChargingLogic(nil)
+		}
+	}()
 
 	go func() {
 		if err := grpcServer.Serve(lis); err != nil {
