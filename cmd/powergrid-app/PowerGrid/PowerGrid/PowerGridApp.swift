@@ -220,7 +220,7 @@ struct HeaderView: View {
     private var computedStatusText: String {
         let adapterPresent = Int(status.adapterMaxWatts) > 0
         if status.forceDischargeActive && adapterPresent {
-            return forceDischargeMode == .auto ? "Force Discharge (Auto)" : "Force Discharge"
+            return forceDischargeMode == .auto ? "Forced Discharge to 20%" : "Forced Discharge"
         }
         if status.isConnected && status.isCharging && status.currentCharge > status.chargeLimit && status.chargeLimit < 100 {
             return "404 - Limiter not found!"
