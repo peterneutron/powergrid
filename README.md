@@ -22,7 +22,10 @@ PowerGrid is a macOS power management tool composed of:
 - Live status: current charge, adapter description, health (%), cycle count.
 - Power metrics: system, adapter, and battery wattage; adapter input voltage and amperage.
 - Charge limit slider from 60–100%.
-- Advanced options: Prevent Display/System Sleep, Force Discharge.
+- Power Assertions: Prevent Display/System Sleep.
+- Force Discharge: Discharges even when an adapter is present.
+- Force Discharge Automatic: Discharges to your limit, then auto-disables; only selectable above limit.
+- Native Notifications: Alerts for key events (e.g., cutoff), single permission prompt.
 - Installer flow to install/uninstall the helper daemon with administrator privileges.
 
 ## Getting Started: Building from Source
