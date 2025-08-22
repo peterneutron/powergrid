@@ -63,6 +63,10 @@ struct UserIntent: Equatable {
         private var rawGRPCClient: GRPCClient<HTTP2ClientTransport.Posix>?
         private let group = MultiThreadedEventLoopGroup(numberOfThreads: 1)
         private var appliedStartupSafety = false
+        private var prevStatus: Rpc_StatusResponse?
+        private var prevIntent: UserIntent?
+        private let rules = RulesEngine()
+        private var autoArmed = false // Auto is engaged (Auto selected AND FD active)
         
         init() {
             if let savedValue = UserDefaults.standard.string(forKey: "menuBarDisplayStyle"),
@@ -141,6 +145,10 @@ struct UserIntent: Equatable {
                 let autoCutoffRaw = (activeLimit < 100 ? activeLimit : preferred)
                 let autoCutoff = min(max(autoCutoffRaw, 60), 99)
 
+                // Track whether Auto is actively engaged (selected + FD active)
+                let autoEngagedNow = (self.userIntent.forceDischargeMode == .auto) && response.forceDischargeActive
+                if autoEngagedNow { self.autoArmed = true }
+
                 let newFDMode: ForceDischargeMode = {
                     if self.userIntent.forceDischargeMode == .auto {
                         // If Auto was selected and forced discharge is no longer active
@@ -163,18 +171,28 @@ struct UserIntent: Equatable {
                 )
                 
                 if self.userIntent != intentFromServer {
+                    self.prevIntent = self.userIntent
                     self.userIntent = intentFromServer
                     log("Synchronized UI intent with daemon status.")
                 }
-                
-                // If Auto is selected, automatically disable forced discharge at/below the cutoff.
-                if self.userIntent.forceDischargeMode == .auto,
-                   Int(response.currentCharge) <= autoCutoff,
-                   response.forceDischargeActive {
-                    await self.setPowerFeature(feature: .forceDischarge, enable: false)
-                    await self.postNotification(title: "Force Discharge Disabled",
-                                                body: "Reached limit (\(autoCutoff)%). Re-enabled adapter.")
+
+                // Evaluate rules and apply actions
+                let ctx = RuleContext(
+                    previousStatus: self.prevStatus,
+                    currentStatus: response,
+                    previousIntent: self.prevIntent,
+                    currentIntent: self.userIntent
+                )
+                let actions = self.rules.evaluate(ctx)
+                for action in actions {
+                    switch action {
+                    case .disableForceDischargeAndNotify(let limit):
+                        await self.setPowerFeature(feature: .forceDischarge, enable: false)
+                        await NotificationsService.shared.post(title: "Force Discharge Disabled",
+                                                               body: "Reached limit (\(limit)%). Re-enabled adapter.")
+                    }
                 }
+                self.prevStatus = response
 
                 if connectionState != .connected {
                     connectionState = .connected
@@ -315,14 +333,5 @@ struct UserIntent: Equatable {
             print("[DaemonClient] \(message)")
         }
 
-        // MARK: - Notifications
-        private func postNotification(title: String, body: String) async {
-            let content = UNMutableNotificationContent()
-            content.title = title
-            content.body = body
-            let request = UNNotificationRequest(identifier: UUID().uuidString,
-                                                content: content,
-                                                trigger: nil)
-            _ = try? await UNUserNotificationCenter.current().add(request)
-        }
+        // Notifications are handled via NotificationsService
     }
