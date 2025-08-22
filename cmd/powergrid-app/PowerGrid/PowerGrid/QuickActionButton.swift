@@ -82,6 +82,8 @@ struct MultiStateActionButton<Value: Equatable>: View {
     var showsCaption: Bool = false
     var isActiveProvider: ((Value) -> Bool)? = nil
     var onChange: ((Value) -> Void)? = nil
+    // Optional: skip certain values when cycling (e.g., disable a state)
+    var shouldSkip: ((Value) -> Bool)? = nil
 
     @State private var hovering = false
 
@@ -89,8 +91,14 @@ struct MultiStateActionButton<Value: Equatable>: View {
         guard let idx = states.firstIndex(where: { $0.value == selection }) else {
             return states.first?.value ?? selection
         }
-        let nextIdx = (idx + 1) % states.count
-        return states[nextIdx].value
+        var nextIdx = idx
+        for _ in 0..<states.count {
+            nextIdx = (nextIdx + 1) % states.count
+            let candidate = states[nextIdx].value
+            if let skip = shouldSkip, skip(candidate) { continue }
+            return candidate
+        }
+        return selection
     }
 
     private var currentState: ActionState<Value>? {
