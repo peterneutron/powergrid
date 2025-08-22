@@ -7,6 +7,7 @@
 // File: PowerGridApp.swift
 
 import SwiftUI
+import UserNotifications
 
 @main
 struct PowerGridApp: App {
@@ -27,6 +28,7 @@ struct PowerGridApp: App {
         } label: {
             MenuBarLabelView(client: client)
                 .task {
+                    UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
                     client.connect()
                     await client.fetchStatus()
                 }
@@ -430,15 +432,27 @@ struct QuickActionsView: View {
         let columnsCount = max(1, min(4, actionsCount))
         let columns = Array(repeating: GridItem(.flexible()), count: columnsCount)
         let adapterPresent = (Int(status.adapterMaxWatts) > 0)
+        let userLimit = (client.userIntent.chargeLimit < 100) ? client.userIntent.chargeLimit : client.userIntent.preferredChargeLimit
+        let autoAllowed = adapterPresent && (Int(status.currentCharge) < userLimit)
+        let fdStates: [ActionState<ForceDischargeMode>] = {
+            if autoAllowed {
+                return [
+                    ActionState(value: .off,  imageName: "bolt.fill",                 tint: .red, help: "Charge normally"),
+                    ActionState(value: .on,   imageName: "bolt.badge.xmark.fill",     tint: .red, help: "Force discharge"),
+                    ActionState(value: .auto, imageName: "bolt.badge.automatic.fill", tint: .red, help: "Auto: Disable at \(userLimit)%")
+                ]
+            } else {
+                return [
+                    ActionState(value: .off,  imageName: "bolt.fill",                 tint: .red, help: "Charge normally"),
+                    ActionState(value: .on,   imageName: "bolt.badge.xmark.fill",     tint: .red, help: "Force discharge")
+                ]
+            }
+        }()
 
         LazyVGrid(columns: columns, spacing: 16) {
             MultiStateActionButton<ForceDischargeMode>(
                 title: "Force Discharge",
-                states: [
-                    ActionState(value: .off,  imageName: "bolt.fill",                  tint: .red,   help: "Charge normally"),
-                    ActionState(value: .on,   imageName: "bolt.badge.xmark.fill",      tint: .red,   help: "Force discharge"),
-                    ActionState(value: .auto, imageName: "bolt.badge.automatic.fill",  tint: .red,   help: "Auto: Disable at 20%")
-                ],
+                states: fdStates,
                 selection: $client.userIntent.forceDischargeMode,
                 size: 48,
                 enableHaptics: true,
@@ -450,7 +464,7 @@ struct QuickActionsView: View {
                     case .off:
                         await client.setPowerFeature(feature: .forceDischarge, enable: false)
                     case .on, .auto:
-                        // Enable now; DaemonClient will auto-disable at <= 20%
+                        // Enable now; DaemonClient will auto-disable at/below user limit
                         await client.setPowerFeature(feature: .forceDischarge, enable: true)
                     }
                 }
@@ -459,6 +473,20 @@ struct QuickActionsView: View {
             .opacity(adapterPresent ? 1.0 : 0.45)
             .onAppear { handleAdapterPresence(adapterPresent: adapterPresent) }
             .onChange(of: status.adapterMaxWatts) { _, _ in handleAdapterPresence(adapterPresent: Int(status.adapterMaxWatts) > 0) }
+            .onAppear {
+                let limitNow = (client.userIntent.chargeLimit < 100) ? client.userIntent.chargeLimit : client.userIntent.preferredChargeLimit
+                let autoAllowedNow = (Int(status.adapterMaxWatts) > 0) && (Int(status.currentCharge) < limitNow)
+                if !autoAllowedNow && client.userIntent.forceDischargeMode == .auto {
+                    client.userIntent.forceDischargeMode = .off
+                }
+            }
+            .onChange(of: status.currentCharge) { _, _ in
+                let limitNow = (client.userIntent.chargeLimit < 100) ? client.userIntent.chargeLimit : client.userIntent.preferredChargeLimit
+                let autoAllowedNow = (Int(status.adapterMaxWatts) > 0) && (Int(status.currentCharge) < limitNow)
+                if !autoAllowedNow && client.userIntent.forceDischargeMode == .auto {
+                    client.userIntent.forceDischargeMode = .off
+                }
+            }
 
             MultiStateActionButton<Bool>(
                 title: "Display Sleep",
