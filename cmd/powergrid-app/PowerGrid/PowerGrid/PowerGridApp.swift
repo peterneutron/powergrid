@@ -28,7 +28,7 @@ struct PowerGridApp: App {
         } label: {
             MenuBarLabelView(client: client)
                 .task {
-                    UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
+                    _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])
                     client.connect()
                     await client.fetchStatus()
                 }
@@ -434,52 +434,37 @@ struct QuickActionsView: View {
         let adapterPresent = (Int(status.adapterMaxWatts) > 0)
         let userLimit = (client.userIntent.chargeLimit < 100) ? client.userIntent.chargeLimit : client.userIntent.preferredChargeLimit
         let autoAllowed = adapterPresent && (Int(status.currentCharge) < userLimit)
-        let fdStates: [ActionState<ForceDischargeMode>] = {
-            if autoAllowed {
-                return [
-                    ActionState(value: .off,  imageName: "bolt.fill",                 tint: .red, help: "Charge normally"),
-                    ActionState(value: .on,   imageName: "bolt.badge.xmark.fill",     tint: .red, help: "Force discharge"),
-                    ActionState(value: .auto, imageName: "bolt.badge.automatic.fill", tint: .red, help: "Auto: Disable at \(userLimit)%")
-                ]
-            } else {
-                return [
-                    ActionState(value: .off,  imageName: "bolt.fill",                 tint: .red, help: "Charge normally"),
-                    ActionState(value: .on,   imageName: "bolt.badge.xmark.fill",     tint: .red, help: "Force discharge")
-                ]
-            }
-        }()
 
         LazyVGrid(columns: columns, spacing: 16) {
             MultiStateActionButton<ForceDischargeMode>(
                 title: "Force Discharge",
-                states: fdStates,
+                states: [
+                    ActionState(value: .off,  imageName: "bolt.fill",                 tint: .red, help: "Charge normally"),
+                    ActionState(value: .on,   imageName: "bolt.badge.xmark.fill",     tint: .red, help: "Force discharge"),
+                    ActionState(value: .auto, imageName: "bolt.badge.automatic.fill", tint: .red, help: "Auto: Disable at \(userLimit)%")
+                ],
                 selection: $client.userIntent.forceDischargeMode,
                 size: 48,
                 enableHaptics: true,
                 showsCaption: false,
-                isActiveProvider: { value in value != .off }
-            ) { newMode in
-                Task {
-                    switch newMode {
-                    case .off:
-                        await client.setPowerFeature(feature: .forceDischarge, enable: false)
-                    case .on, .auto:
-                        // Enable now; DaemonClient will auto-disable at/below user limit
-                        await client.setPowerFeature(feature: .forceDischarge, enable: true)
+                isActiveProvider: { value in value != .off },
+                onChange: { newMode in
+                    Task {
+                        switch newMode {
+                        case .off:
+                            await client.setPowerFeature(feature: .forceDischarge, enable: false)
+                        case .on, .auto:
+                            // Enable now; DaemonClient will auto-disable at/below user limit
+                            await client.setPowerFeature(feature: .forceDischarge, enable: true)
+                        }
                     }
-                }
-            }
+                },
+                shouldSkip: { value in value == .auto && !autoAllowed }
+            )
             .disabled(!adapterPresent)
             .opacity(adapterPresent ? 1.0 : 0.45)
             .onAppear { handleAdapterPresence(adapterPresent: adapterPresent) }
             .onChange(of: status.adapterMaxWatts) { _, _ in handleAdapterPresence(adapterPresent: Int(status.adapterMaxWatts) > 0) }
-            .onAppear {
-                let limitNow = (client.userIntent.chargeLimit < 100) ? client.userIntent.chargeLimit : client.userIntent.preferredChargeLimit
-                let autoAllowedNow = (Int(status.adapterMaxWatts) > 0) && (Int(status.currentCharge) < limitNow)
-                if !autoAllowedNow && client.userIntent.forceDischargeMode == .auto {
-                    client.userIntent.forceDischargeMode = .off
-                }
-            }
             .onChange(of: status.currentCharge) { _, _ in
                 let limitNow = (client.userIntent.chargeLimit < 100) ? client.userIntent.chargeLimit : client.userIntent.preferredChargeLimit
                 let autoAllowedNow = (Int(status.adapterMaxWatts) > 0) && (Int(status.currentCharge) < limitNow)
@@ -498,10 +483,11 @@ struct QuickActionsView: View {
                 size: 48,
                 enableHaptics: true,
                 showsCaption: false,
-                isActiveProvider: { $0 }
-            ) { isOn in
-                Task { await client.setPowerFeature(feature: .preventDisplaySleep, enable: isOn) }
-            }
+                isActiveProvider: { $0 },
+                onChange: { isOn in
+                    Task { await client.setPowerFeature(feature: .preventDisplaySleep, enable: isOn) }
+                }
+            )
 
             MultiStateActionButton<Bool>(
                 title: "Limit",
@@ -525,11 +511,12 @@ struct QuickActionsView: View {
                 size: 48,
                 enableHaptics: true,
                 showsCaption: false,
-                isActiveProvider: { $0 }
-            ) { isOn in
-                let newLimit = isOn ? client.userIntent.preferredChargeLimit : 100
-                Task { await client.setLimit(newLimit) }
-            }
+                isActiveProvider: { $0 },
+                onChange: { isOn in
+                    let newLimit = isOn ? client.userIntent.preferredChargeLimit : 100
+                    Task { await client.setLimit(newLimit) }
+                }
+            )
 
             MultiStateActionButton<MenuBarDisplayStyle>(
                 title: "Icons",
@@ -542,8 +529,9 @@ struct QuickActionsView: View {
                 size: 48,
                 enableHaptics: true,
                 showsCaption: false,
-                isActiveProvider: { _ in true }
-            ) { _ in }
+                isActiveProvider: { _ in true },
+                onChange: { _ in }
+            )
             .id(client.userIntent.menuBarDisplayStyle.rawValue)
         }
         .padding(.vertical, 4)
