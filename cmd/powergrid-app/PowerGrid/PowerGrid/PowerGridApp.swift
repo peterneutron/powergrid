@@ -199,10 +199,15 @@ struct MainControlsView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
+            // Compute the Auto cutoff (user limit when <100, else preferred; clamped 60–99)
+            let userLimit = (client.userIntent.chargeLimit < 100) ? client.userIntent.chargeLimit : client.userIntent.preferredChargeLimit
+            let autoCutoff = min(max(userLimit, 60), 99)
+
             HeaderView(
                 status: status,
                 displayStyle: client.userIntent.menuBarDisplayStyle,
-                forceDischargeMode: client.userIntent.forceDischargeMode
+                forceDischargeMode: client.userIntent.forceDischargeMode,
+                autoCutoff: autoCutoff
             )
             Divider()
             ControlsView(client: client)
@@ -218,11 +223,12 @@ struct HeaderView: View {
     let status: Rpc_StatusResponse
     let displayStyle: MenuBarDisplayStyle
     let forceDischargeMode: ForceDischargeMode
+    let autoCutoff: Int
     
     private var computedStatusText: String {
         let adapterPresent = Int(status.adapterMaxWatts) > 0
         if status.forceDischargeActive && adapterPresent {
-            return forceDischargeMode == .auto ? "Forced Discharge to 20%" : "Forced Discharge"
+            return forceDischargeMode == .auto ? "Forced Discharge to \(autoCutoff)%" : "Forced Discharge"
         }
         if status.isConnected && status.isCharging && status.currentCharge > status.chargeLimit && status.chargeLimit < 100 {
             return "404 - Limiter not found!"
@@ -433,7 +439,9 @@ struct QuickActionsView: View {
         let columns = Array(repeating: GridItem(.flexible()), count: columnsCount)
         let adapterPresent = (Int(status.adapterMaxWatts) > 0)
         let userLimit = (client.userIntent.chargeLimit < 100) ? client.userIntent.chargeLimit : client.userIntent.preferredChargeLimit
-        let autoAllowed = adapterPresent && (Int(status.currentCharge) < userLimit)
+        // Auto is only meaningful when current charge is ABOVE the cutoff;
+        // disable/hide Auto at or below the user limit, or when no adapter.
+        let autoAllowed = adapterPresent && (Int(status.currentCharge) > userLimit)
 
         LazyVGrid(columns: columns, spacing: 16) {
             MultiStateActionButton<ForceDischargeMode>(
@@ -467,7 +475,7 @@ struct QuickActionsView: View {
             .onChange(of: status.adapterMaxWatts) { _, _ in handleAdapterPresence(adapterPresent: Int(status.adapterMaxWatts) > 0) }
             .onChange(of: status.currentCharge) { _, _ in
                 let limitNow = (client.userIntent.chargeLimit < 100) ? client.userIntent.chargeLimit : client.userIntent.preferredChargeLimit
-                let autoAllowedNow = (Int(status.adapterMaxWatts) > 0) && (Int(status.currentCharge) < limitNow)
+                let autoAllowedNow = (Int(status.adapterMaxWatts) > 0) && (Int(status.currentCharge) > limitNow)
                 if !autoAllowedNow && client.userIntent.forceDischargeMode == .auto {
                     client.userIntent.forceDischargeMode = .off
                 }

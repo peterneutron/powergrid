@@ -187,6 +187,7 @@ struct UserIntent: Equatable {
                 for action in actions {
                     switch action {
                     case .disableForceDischargeAndNotify(let limit):
+                        guard self.userIntent.forceDischargeMode == .auto else { break }
                         await self.setPowerFeature(feature: .forceDischarge, enable: false)
                         await NotificationsService.shared.post(title: "Force Discharge Disabled",
                                                                body: "Reached limit (\(limit)%). Re-enabled adapter.")

@@ -36,7 +36,10 @@ struct ForceDischargeAutoCutoffRule: Rule {
         ctx.currentIntent.forceDischargeMode == .auto && ctx.currentStatus.forceDischargeActive
     }
     func shouldFire(_ ctx: RuleContext) -> RuleAction? {
+        // Only fire if Auto was and still is the selected mode, FD is active,
+        // and charge is at/below the user cutoff.
         guard ctx.currentIntent.forceDischargeMode == .auto,
+              ctx.previousIntent?.forceDischargeMode == .auto,
               ctx.currentStatus.forceDischargeActive,
               Int(ctx.currentStatus.currentCharge) <= ctx.autoCutoff else { return nil }
         return .disableForceDischargeAndNotify(limit: ctx.autoCutoff)
@@ -69,4 +72,3 @@ final class RulesEngine {
         return actions
     }
 }
-
