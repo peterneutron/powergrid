@@ -130,6 +130,8 @@ struct UserIntent: Equatable {
             do {
                 let response = try await client.getStatus(Rpc_Empty())
                 self.status = response
+                // Snapshot previous intent at the start of this tick for rules evaluation
+                let previousIntentForThisTick = self.userIntent
 
                 // Safety on launch: do not carry forced discharge across app restarts.
                 if !appliedStartupSafety {
@@ -171,16 +173,17 @@ struct UserIntent: Equatable {
                 )
                 
                 if self.userIntent != intentFromServer {
-                    self.prevIntent = self.userIntent
                     self.userIntent = intentFromServer
                     log("Synchronized UI intent with daemon status.")
                 }
+                // Always update prevIntent for this evaluation tick so rules have accurate history
+                self.prevIntent = previousIntentForThisTick
 
                 // Evaluate rules and apply actions
                 let ctx = RuleContext(
                     previousStatus: self.prevStatus,
                     currentStatus: response,
-                    previousIntent: self.prevIntent,
+                    previousIntent: previousIntentForThisTick,
                     currentIntent: self.userIntent
                 )
                 let actions = self.rules.evaluate(ctx)
