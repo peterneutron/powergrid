@@ -353,7 +353,14 @@ extension ControlsView {
     private func chargeLimitBinding() -> Binding<Double> {
         Binding<Double>(
             get: { Double(client.userIntent.chargeLimit) },
-            set: { client.userIntent.chargeLimit = Int($0) }
+            set: {
+                let value = Int($0)
+                client.userIntent.chargeLimit = value
+                if value < 100 {
+                    client.userIntent.preferredChargeLimit = value
+                    UserDefaults.standard.set(value, forKey: "preferredChargeLimit")
+                }
+            }
         )
     }
 }
@@ -401,122 +408,101 @@ struct QuickActionsView: View {
     @ObservedObject var client: DaemonClient
     
     var body: some View {
-        let columns = [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())]
+        let actionsCount = 4 // Update if actions added/removed dynamically
+        let columnsCount = max(1, min(4, actionsCount))
+        let columns = Array(repeating: GridItem(.flexible()), count: columnsCount)
         LazyVGrid(columns: columns, spacing: 16) {
-            TriStateQuickActionButton(
-                imageOff: "bolt.fill",
-                imageOn: "bolt.badge.xmark.fill",
-                imageAuto: "bolt.badge.automatic.fill",
+            MultiStateActionButton<ForceDischargeMode>(
                 title: "Force Discharge",
-                mode: $client.userIntent.forceDischargeMode,
+                states: [
+                    ActionState(value: .off,  imageName: "bolt.fill",                  tint: .red,   help: "Charge normally"),
+                    ActionState(value: .on,   imageName: "bolt.badge.xmark.fill",      tint: .red,   help: "Force discharge"),
+                    ActionState(value: .auto, imageName: "bolt.badge.automatic.fill",  tint: .red,   help: "Auto: Disable at 20%")
+                ],
+                selection: $client.userIntent.forceDischargeMode,
                 size: 48,
                 enableHaptics: true,
-                activeTintColor: .red,
-                helpText: {
-                    switch client.userIntent.forceDischargeMode {
-                    case .off:  return "Charge normally"
-                    case .on:   return "Force discharge"
-                    case .auto: return "Auto: Disable at 20%"
-                    }
-                }(),
-                showsCaption: false
+                showsCaption: false,
+                isActiveProvider: { value in value != .off }
             ) { newMode in
                 Task {
                     switch newMode {
                     case .off:
                         await client.setPowerFeature(feature: .forceDischarge, enable: false)
-                    case .on:
-                        await client.setPowerFeature(feature: .forceDischarge, enable: true)
-                    case .auto:
+                    case .on, .auto:
                         // Enable now; DaemonClient will auto-disable at <= 20%
                         await client.setPowerFeature(feature: .forceDischarge, enable: true)
                     }
                 }
             }
-            
-            QuickActionButton(
-                imageOff: "moon.fill",
-                imageOn: "sun.max.fill",
+
+            MultiStateActionButton<Bool>(
                 title: "Display Sleep",
-                isOn: $client.userIntent.preventDisplaySleep,
-                activeTintColor: .green,
-                helpText: client.userIntent.preventDisplaySleep
-                    ? "Prevents display sleep"
-                    : "Allows display sleep",
-                showsCaption: false
-            ) {
-                Task {
-                    await client.setPowerFeature(
-                        feature: .preventDisplaySleep,
-                        enable: client.userIntent.preventDisplaySleep
-                    )
-                }
+                states: [
+                    ActionState(value: false, imageName: "moon.fill",     tint: .green, help: "Allows display sleep"),
+                    ActionState(value: true,  imageName: "sun.max.fill",  tint: .green, help: "Prevents display sleep")
+                ],
+                selection: $client.userIntent.preventDisplaySleep,
+                size: 48,
+                enableHaptics: true,
+                showsCaption: false,
+                isActiveProvider: { $0 }
+            ) { isOn in
+                Task { await client.setPowerFeature(feature: .preventDisplaySleep, enable: isOn) }
             }
-            
-            QuickActionButton(
-                imageOff: "infinity",
-                imageOn: "lock.fill",
+
+            MultiStateActionButton<Bool>(
                 title: "Limit",
-                isOn: limitBinding(),
-                activeTintColor: .green,
-                helpText: client.userIntent.chargeLimit >= 100
-                    ? "No charging limit"
-                    : "Charging limited to \(client.userIntent.chargeLimit)%",
+                states: [
+                    ActionState(
+                        value: false,
+                        imageName: "infinity",
+                        tint: .green,
+                        help: "No charging limit",
+                        accessibilityLabel: "Limit Off"
+                    ),
+                    ActionState(
+                        value: true,
+                        imageName: "lock.fill",
+                        tint: .green,
+                        help: "Charging limited to \(client.userIntent.preferredChargeLimit)%",
+                        accessibilityLabel: "Limit On (\(client.userIntent.preferredChargeLimit)%)"
+                    )
+                ],
+                selection: limitBinding(),
+                size: 48,
+                enableHaptics: true,
                 showsCaption: false,
-                action: nil,
-            )
-            
-            QuickActionButton(
-                imageOff: styleIconName(),
-                imageOn: nil,
+                isActiveProvider: { $0 }
+            ) { isOn in
+                let newLimit = isOn ? client.userIntent.preferredChargeLimit : 100
+                Task { await client.setLimit(newLimit) }
+            }
+
+            MultiStateActionButton<MenuBarDisplayStyle>(
                 title: "Icons",
-                isOn: .constant(true),
-                activeTintColor: styleButtonTintColor,
-                helpText: "Menu bar (\(styleLabel()))",
+                states: [
+                    ActionState(value: .iconAndText, imageName: "circle.grid.2x1.fill",          tint: .green,  help: "Menu bar (Icon + Text)"),
+                    ActionState(value: .iconOnly,    imageName: "circle.grid.2x1.left.filled",   tint: .yellow, help: "Menu bar (Icon Only)"),
+                    ActionState(value: .textOnly,    imageName: "circle.grid.2x1.right.filled",  tint: .red,    help: "Menu bar (Text Only)")
+                ],
+                selection: $client.userIntent.menuBarDisplayStyle,
+                size: 48,
+                enableHaptics: true,
                 showsCaption: false,
-                action: {
-                    client.userIntent.menuBarDisplayStyle = client.userIntent.menuBarDisplayStyle.next()
-                },
-            )
+                isActiveProvider: { _ in true }
+            ) { _ in }
             .id(client.userIntent.menuBarDisplayStyle.rawValue)
         }
         .padding(.vertical, 4)
     }
     
-    private var styleButtonTintColor: Color {
-        switch client.userIntent.menuBarDisplayStyle {
-        case .iconAndText:
-            return .green
-        case .iconOnly:
-            return .yellow
-        case .textOnly:
-            return .red
-        }
-    }
-
-    
-    private func styleLabel() -> String {
-        switch client.userIntent.menuBarDisplayStyle {
-        case .iconAndText: return "Icon + Text"
-        case .iconOnly:    return "Icon Only"
-        case .textOnly:    return "Text Only"
-        }
-    }
-    
-    private func styleIconName() -> String {
-        switch client.userIntent.menuBarDisplayStyle {
-        case .iconAndText: return "circle.grid.2x1.fill"
-        case .iconOnly:    return "circle.grid.2x1.left.filled"
-        case .textOnly:    return "circle.grid.2x1.right.filled"
-        }
-    }
     private func limitBinding() -> Binding<Bool> {
         Binding<Bool>(
             get: { client.userIntent.chargeLimit < 100 },
             set: { turnOn in
-                let newLimit = turnOn ? 80 : 100
+                let newLimit = turnOn ? client.userIntent.preferredChargeLimit : 100
                 client.userIntent.chargeLimit = newLimit
-                Task { await client.setLimit(newLimit) }
             }
         )
     }
