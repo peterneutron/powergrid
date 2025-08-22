@@ -16,64 +16,7 @@ enum Haptics {
     }
 }
 
-// MARK: - QuickActionButton
-struct QuickActionButton: View {
-    let imageOff: String
-    let imageOn: String?
-    let title: String?
-    @Binding var isOn: Bool
-    var size: CGFloat = 48
-    var enableHaptics: Bool = true
-    var activeTintColor: Color? = nil
-
-    // NEW:
-    var helpText: String? = nil
-    var showsCaption: Bool = false
-    var accessibilityLabelText: String? = nil
-    var action: (() -> Void)? = nil
-
-    @State private var hovering = false
-
-    var body: some View {
-        let currentImage = isOn ? (imageOn ?? imageOff) : imageOff
-
-        VStack(spacing: showsCaption ? 8 : 0) {
-            Button {
-                isOn.toggle()
-                action?()
-                if enableHaptics { Haptics.tap() }
-            } label: {
-                Image(systemName: currentImage)
-                    .font(.system(size: size * 0.42, weight: .semibold))
-                    .symbolRenderingMode(.hierarchical)
-                    .frame(width: size, height: size)
-                    .contentShape(Circle())
-            }
-            .help(helpText ?? title ?? currentImage)
-            .accessibilityLabel(Text(accessibilityLabelText ?? title ?? currentImage))
-            .accessibilityValue(Text(isOn ? "On" : "Off"))
-            .buttonStyle(
-                CircleToggleStyle(
-                    isOn: isOn,
-                    hovering: hovering,
-                    size: size,
-                    tintColor: activeTintColor ?? .accentColor
-                )
-            )
-
-            if showsCaption, let title {
-                Text(title)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .frame(width: size * 1.35)
-            }
-        }
-        .onHover { hovering = $0 }
-    }
-}
-
-// MARK: - CircleToggleStyle
+// MARK: - Common Style
 struct CircleToggleStyle: ButtonStyle {
     var isOn: Bool
     var hovering: Bool
@@ -96,7 +39,7 @@ struct CircleToggleStyle: ButtonStyle {
 
                     if isOn {
                         Circle()
-                            .fill(tintColor.opacity(0.22)) // Use the property
+                            .fill(tintColor.opacity(0.22))
                             .transition(.opacity)
                     }
 
@@ -121,62 +64,74 @@ struct CircleToggleStyle: ButtonStyle {
     }
 }
 
-// MARK: - TriStateQuickActionButton
-struct TriStateQuickActionButton: View {
-    let imageOff: String
-    let imageOn: String
-    let imageAuto: String
-    let title: String?
-    @Binding var mode: ForceDischargeMode
+// MARK: - MultiStateActionButton
+struct ActionState<Value: Equatable>: Equatable {
+    var value: Value
+    var imageName: String
+    var tint: Color? = nil
+    var help: String? = nil
+    var accessibilityLabel: String? = nil
+}
+
+struct MultiStateActionButton<Value: Equatable>: View {
+    var title: String?
+    var states: [ActionState<Value>]
+    @Binding var selection: Value
     var size: CGFloat = 48
     var enableHaptics: Bool = true
-    var activeTintColor: Color? = .red
-    var helpText: String? = nil
     var showsCaption: Bool = false
-    var accessibilityLabelText: String? = nil
-    var action: ((ForceDischargeMode) -> Void)? = nil
+    var isActiveProvider: ((Value) -> Bool)? = nil
+    var onChange: ((Value) -> Void)? = nil
 
     @State private var hovering = false
 
-    private var currentImage: String {
-        switch mode {
-        case .off:  return imageOff
-        case .on:   return imageOn
-        case .auto: return imageAuto
+    private func nextSelection() -> Value {
+        guard let idx = states.firstIndex(where: { $0.value == selection }) else {
+            return states.first?.value ?? selection
         }
+        let nextIdx = (idx + 1) % states.count
+        return states[nextIdx].value
+    }
+
+    private var currentState: ActionState<Value>? {
+        states.first(where: { $0.value == selection }) ?? states.first
+    }
+
+    private var isOn: Bool {
+        if let provider = isActiveProvider { return provider(selection) }
+        // Default: first state is Off, others are On
+        if let idx = states.firstIndex(where: { $0.value == selection }) {
+            return idx != 0
+        }
+        return false
     }
 
     var body: some View {
-        let isActive = mode != .off
+        let image = currentState?.imageName ?? "questionmark"
+        let tint = currentState?.tint ?? .accentColor
 
         VStack(spacing: showsCaption ? 8 : 0) {
             Button {
-                // Cycle: off -> on -> auto -> off
-                switch mode {
-                case .off:  mode = .on
-                case .on:   mode = .auto
-                case .auto: mode = .off
-                }
-                action?(mode)
+                let newValue = nextSelection()
+                selection = newValue
+                onChange?(newValue)
                 if enableHaptics { Haptics.tap() }
             } label: {
-                Image(systemName: currentImage)
+                Image(systemName: image)
                     .font(.system(size: size * 0.42, weight: .semibold))
                     .symbolRenderingMode(.hierarchical)
                     .frame(width: size, height: size)
                     .contentShape(Circle())
             }
-            .help(helpText ?? title ?? currentImage)
-            .accessibilityLabel(Text(accessibilityLabelText ?? title ?? currentImage))
-            .accessibilityValue(Text({
-                switch mode { case .off: return "Off"; case .on: return "On"; case .auto: return "Auto" }
-            }()))
+            .help(currentState?.help ?? title ?? image)
+            .accessibilityLabel(Text(currentState?.accessibilityLabel ?? title ?? image))
+            .accessibilityValue(Text(isOn ? "On" : "Off"))
             .buttonStyle(
                 CircleToggleStyle(
-                    isOn: isActive,
+                    isOn: isOn,
                     hovering: hovering,
                     size: size,
-                    tintColor: activeTintColor ?? .red
+                    tintColor: tint
                 )
             )
 

@@ -20,6 +20,7 @@ enum ForceDischargeMode: String, Equatable {
 
 struct UserIntent: Equatable {
     var chargeLimit: Int = 100
+    var preferredChargeLimit: Int = 80
     var preventDisplaySleep: Bool = false
     var preventSystemSleep: Bool = false
     var forceDischargeMode: ForceDischargeMode = .off
@@ -67,6 +68,11 @@ struct UserIntent: Equatable {
                let style = MenuBarDisplayStyle(rawValue: savedValue) {
                 self.userIntent.menuBarDisplayStyle = style
                 log("Loaded menu bar display style: \(style.rawValue)")
+            }
+            if let savedPref = UserDefaults.standard.object(forKey: "preferredChargeLimit") as? Int,
+               (60...99).contains(savedPref) {
+                self.userIntent.preferredChargeLimit = savedPref
+                log("Loaded preferred charge limit: \(savedPref)%")
             }
             
             connect()
@@ -127,11 +133,12 @@ struct UserIntent: Equatable {
                         Task { await self.setPowerFeature(feature: .forceDischarge, enable: false) }
                     }
                 }
-                
-                // Keep user's selected tri-state mode for force discharge when in .auto.
-                // Otherwise, mirror the daemon's active state.
+
                 let newFDMode: ForceDischargeMode = {
                     if self.userIntent.forceDischargeMode == .auto {
+                        if !response.forceDischargeActive && response.currentCharge <= 20 {
+                            return .off
+                        }
                         return .auto
                     }
                     return response.forceDischargeActive ? .on : .off
@@ -139,6 +146,7 @@ struct UserIntent: Equatable {
 
                 let intentFromServer = UserIntent(
                     chargeLimit: Int(response.chargeLimit),
+                    preferredChargeLimit: (response.chargeLimit < 100 ? Int(response.chargeLimit) : self.userIntent.preferredChargeLimit),
                     preventDisplaySleep: response.preventDisplaySleepActive,
                     preventSystemSleep: response.preventSystemSleepActive,
                     forceDischargeMode: newFDMode,
@@ -193,6 +201,12 @@ struct UserIntent: Equatable {
                 print("Error setting limit: \(error)")
             }
             
+            if newLimit < 100 {
+                self.userIntent.preferredChargeLimit = newLimit
+                UserDefaults.standard.set(newLimit, forKey: "preferredChargeLimit")
+                log("Saved preferred charge limit: \(newLimit)%")
+            }
+
             await fetchStatus()
         }
         
