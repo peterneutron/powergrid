@@ -95,6 +95,10 @@ private struct StatusIconLabel: View {
     let status: Rpc_StatusResponse
 
     private var primaryIconName: String {
+        let adapterPresent = Int(status.adapterMaxWatts) > 0
+        if status.forceDischargeActive && adapterPresent {
+            return "exclamationmark.triangle.fill"
+        }
         let charge     = Int(status.currentCharge)
         let limit      = Int(status.chargeLimit)
         let nearLimit  = charge >= max(limit - 1, 0)
@@ -193,12 +197,16 @@ struct MainControlsView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HeaderView(status: status, displayStyle: client.userIntent.menuBarDisplayStyle)
+            HeaderView(
+                status: status,
+                displayStyle: client.userIntent.menuBarDisplayStyle,
+                forceDischargeMode: client.userIntent.forceDischargeMode
+            )
             Divider()
             ControlsView(client: client)
             Divider()
             
-            QuickActionsView(client: client)
+            QuickActionsView(client: client, status: status)
             FooterActionsView(client: client)
         }
     }
@@ -207,8 +215,13 @@ struct MainControlsView: View {
 struct HeaderView: View {
     let status: Rpc_StatusResponse
     let displayStyle: MenuBarDisplayStyle
+    let forceDischargeMode: ForceDischargeMode
     
     private var computedStatusText: String {
+        let adapterPresent = Int(status.adapterMaxWatts) > 0
+        if status.forceDischargeActive && adapterPresent {
+            return forceDischargeMode == .auto ? "Force Discharge (Auto)" : "Force Discharge"
+        }
         if status.isConnected && status.isCharging && status.currentCharge > status.chargeLimit && status.chargeLimit < 100 {
             return "404 - Limiter not found!"
         }
@@ -225,7 +238,7 @@ struct HeaderView: View {
             return "Fully Charged"
         }
         
-        return "Not Charging"
+        return "Discharging"
     }
     
     var body: some View {
@@ -266,16 +279,20 @@ struct HeaderView: View {
             
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 4) {
-                    let adapterText = status.isConnected
-                    ? "Connected"
-                    : "Disconnected"
+                    let adapterText: String = {
+                        if status.forceDischargeActive {
+                            return "Disabled"
+                        }
+                        return status.isConnected ? "Connected" : "Disconnected"
+                    }()
                     Grid(alignment: .leading, horizontalSpacing: 4) {
                         GridRow {
                             Text("Adapter:")
                             Text("\(adapterText)")
                                 .monospacedDigit()
                                 .gridColumnAlignment(.trailing)
-                            Text(status.isConnected ? "(\(Int(status.adapterMaxWatts)) W)" : "").foregroundColor(.primary)
+                            Text((status.isConnected || status.forceDischargeActive) ? "(\(Int(status.adapterMaxWatts)) W)" : "")
+                                .foregroundColor(.primary)
                         }
                         Grid(alignment: .leading, horizontalSpacing: 6) {
                             GridRow {
@@ -406,11 +423,14 @@ struct PowerMetricsView: View {
 
 struct QuickActionsView: View {
     @ObservedObject var client: DaemonClient
+    let status: Rpc_StatusResponse
     
     var body: some View {
         let actionsCount = 4 // Update if actions added/removed dynamically
         let columnsCount = max(1, min(4, actionsCount))
         let columns = Array(repeating: GridItem(.flexible()), count: columnsCount)
+        let adapterPresent = (Int(status.adapterMaxWatts) > 0)
+
         LazyVGrid(columns: columns, spacing: 16) {
             MultiStateActionButton<ForceDischargeMode>(
                 title: "Force Discharge",
@@ -435,6 +455,10 @@ struct QuickActionsView: View {
                     }
                 }
             }
+            .disabled(!adapterPresent)
+            .opacity(adapterPresent ? 1.0 : 0.45)
+            .onAppear { handleAdapterPresence(adapterPresent: adapterPresent) }
+            .onChange(of: status.adapterMaxWatts) { _, _ in handleAdapterPresence(adapterPresent: Int(status.adapterMaxWatts) > 0) }
 
             MultiStateActionButton<Bool>(
                 title: "Display Sleep",
@@ -505,6 +529,21 @@ struct QuickActionsView: View {
                 client.userIntent.chargeLimit = newLimit
             }
         )
+    }
+    
+    private func handleAdapterPresence(adapterPresent: Bool) {
+        // If adapter is removed while force discharge is active or selected, immediately reflect Off in UI
+        // and request the daemon to disable forced discharge in the background.
+        if !adapterPresent {
+            if client.userIntent.forceDischargeMode != .off || (client.status?.forceDischargeActive == true) {
+                Task { @MainActor in
+                    client.userIntent.forceDischargeMode = .off
+                }
+                Task {
+                    await client.setPowerFeature(feature: .forceDischarge, enable: false)
+                }
+            }
+        }
     }
 }
 
