@@ -7,6 +7,7 @@
 // File: DaemonClient.swift
 
 import Foundation
+import UserNotifications
 import GRPCCore
 import GRPCNIOTransportHTTP2Posix
 import GRPCProtobuf
@@ -134,9 +135,17 @@ struct UserIntent: Equatable {
                     }
                 }
 
+                // Determine Auto cutoff: use active user limit (<100) or preferred limit if Off (100)
+                let activeLimit = Int(response.chargeLimit)
+                let preferred = self.userIntent.preferredChargeLimit
+                let autoCutoffRaw = (activeLimit < 100 ? activeLimit : preferred)
+                let autoCutoff = min(max(autoCutoffRaw, 60), 99)
+
                 let newFDMode: ForceDischargeMode = {
                     if self.userIntent.forceDischargeMode == .auto {
-                        if !response.forceDischargeActive && response.currentCharge <= 20 {
+                        // If Auto was selected and forced discharge is no longer active
+                        // and we're at/below the cutoff, reflect Off in UI.
+                        if !response.forceDischargeActive && Int(response.currentCharge) <= autoCutoff {
                             return .off
                         }
                         return .auto
@@ -158,11 +167,13 @@ struct UserIntent: Equatable {
                     log("Synchronized UI intent with daemon status.")
                 }
                 
-                // If user selected Auto, automatically disable forced discharge at/below 20%.
+                // If Auto is selected, automatically disable forced discharge at/below the cutoff.
                 if self.userIntent.forceDischargeMode == .auto,
-                   response.currentCharge <= 20,
+                   Int(response.currentCharge) <= autoCutoff,
                    response.forceDischargeActive {
                     await self.setPowerFeature(feature: .forceDischarge, enable: false)
+                    await self.postNotification(title: "Force Discharge Disabled",
+                                                body: "Reached limit (\(autoCutoff)%). Re-enabled adapter.")
                 }
 
                 if connectionState != .connected {
@@ -302,5 +313,16 @@ struct UserIntent: Equatable {
         
         private func log(_ message: String) {
             print("[DaemonClient] \(message)")
+        }
+
+        // MARK: - Notifications
+        private func postNotification(title: String, body: String) async {
+            let content = UNMutableNotificationContent()
+            content.title = title
+            content.body = body
+            let request = UNNotificationRequest(identifier: UUID().uuidString,
+                                                content: content,
+                                                trigger: nil)
+            _ = try? await UNUserNotificationCenter.current().add(request)
         }
     }
