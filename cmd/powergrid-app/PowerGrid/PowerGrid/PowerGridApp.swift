@@ -473,13 +473,8 @@ struct QuickActionsView: View {
             .opacity(adapterPresent ? 1.0 : 0.45)
             .onAppear { handleAdapterPresence(adapterPresent: adapterPresent) }
             .onChange(of: status.adapterMaxWatts) { _, _ in handleAdapterPresence(adapterPresent: Int(status.adapterMaxWatts) > 0) }
-            .onChange(of: status.currentCharge) { _, _ in
-                let limitNow = (client.userIntent.chargeLimit < 100) ? client.userIntent.chargeLimit : client.userIntent.preferredChargeLimit
-                let autoAllowedNow = (Int(status.adapterMaxWatts) > 0) && (Int(status.currentCharge) > limitNow)
-                if !autoAllowedNow && client.userIntent.forceDischargeMode == .auto {
-                    client.userIntent.forceDischargeMode = .off
-                }
-            }
+            // Do not forcibly flip Auto off on charge changes here;
+            // the RulesEngine handles disabling FD and the UI updates accordingly.
 
             MultiStateActionButton<Bool>(
                 title: "Display Sleep",
