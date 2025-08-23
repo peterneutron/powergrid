@@ -61,11 +61,10 @@ mkdir -p "${BUILD_OUTPUT_DIR}"
 echo "--- Computing daemon BuildID (git) ---"
 if command -v git >/dev/null 2>&1; then
     DAEMON_BUILD_ID=$(git -C "${PROJECT_ROOT}" rev-parse --short=12 HEAD:cmd/powergrid-daemon || true)
-    # Mark as dirty if repository has any uncommitted or untracked changes (whole tree)
+    # Mark as dirty if repository has any changes (whole tree), using porcelain to avoid non-zero exits with set -e
     DIRTY_SUFFIX=""
-    if ! git -C "${PROJECT_ROOT}" diff --quiet -- .; then DIRTY_SUFFIX="-dirty"; fi
-    if ! git -C "${PROJECT_ROOT}" diff --cached --quiet -- .; then DIRTY_SUFFIX="-dirty"; fi
-    if [ -n "$(git -C "${PROJECT_ROOT}" ls-files --others --exclude-standard)" ]; then DIRTY_SUFFIX="-dirty"; fi
+    STATUS=$(git -C "${PROJECT_ROOT}" status --porcelain || true)
+    if [ -n "$STATUS" ]; then DIRTY_SUFFIX="-dirty"; fi
     DAEMON_BUILD_ID="${DAEMON_BUILD_ID}${DIRTY_SUFFIX}"
 fi
 if [ -z "${DAEMON_BUILD_ID}" ]; then
