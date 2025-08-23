@@ -190,7 +190,7 @@ struct InstallationView: View {
             }
             .buttonStyle(.borderedProminent)
             
-            if client.installerState == .upgradeAvailable {
+            if client.installerState == .upgradeAvailable && (client.embeddedDaemonBuildID?.hasSuffix("-dirty") == true) {
                 Button("Skip for now") {
                     // Session-only skip: continue with existing daemon
                     client.setSkipUpgradeForSession()
