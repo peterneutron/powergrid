@@ -20,6 +20,7 @@ PowerGrid is a macOS power management tool composed of:
 - Menu bar status with icons for charge, charging state, and limiter active.
 - Control Center-Inspired Toggles: A grid of beautiful, macOS-style buttons provides immediate, one-click access to essential power management functions like Force Discharge and Prevent Display Sleep.
 - Live status: current charge, adapter description, health (%), cycle count.
+- Time estimates: Time to Full (while charging) or Time to Empty (while discharging), formatted hh:mm. Time to Full automatically scales to your active charge limit when <100% and hides when full/at limit/paused.
 - Power metrics: system, adapter, and battery wattage; adapter input voltage and amperage.
 - Charge limit slider from 60–100%.
 - Power Assertions: Prevent Display/System Sleep.
@@ -27,6 +28,13 @@ PowerGrid is a macOS power management tool composed of:
 - Force Discharge Automatic: Discharges to your limit, then auto-disables; only selectable above limit.
 - Native Notifications: Alerts for key events (e.g., cutoff), single permission prompt.
 - Installer flow to install/uninstall the helper daemon with administrator privileges.
+
+### Offline Daemon Pairing and Upgrades
+
+- BuildID pairing: The app and daemon are paired offline using a git-based BuildID (derived from `HEAD:cmd/powergrid-daemon`). The daemon reports its BuildID via gRPC, and the app embeds a matching BuildID sidecar for comparison.
+- Upgrade flow: On app start, if the embedded BuildID differs from the installed daemon's BuildID, the app offers an "Upgrade Daemon" flow (reuses the installer).
+- Dev convenience: If the app is built from a dirty working tree, the embedded BuildID is suffixed with `-dirty`. In this case, the app proactively offers an upgrade and also shows a "Skip for now" option so you can continue a dev session with the existing daemon.
+- Developer submenu: In dirty builds, Advanced Options shows a "Developer" submenu with short forms of both BuildIDs and tooltips with full hashes.
 
 ## Getting Started: Building from Source
 
@@ -64,6 +72,10 @@ This command will:
 - Build and archive the application.
 - Export a clean, runnable `PowerGrid.app` into a `./build` directory.
 
+Notes on version pairing and build artifacts:
+- During the build, the daemon is compiled with an ldflags-stamped `BuildID` and a sidecar file `powergrid-daemon.buildid` is produced and bundled into the app. This avoids coupling hashes to code signing.
+- The app compares its embedded `BuildID` to the daemon's `GetVersion` response on first connection to decide if an upgrade prompt is needed.
+
 You can now run the app from the `./build` folder.
 
 ## Development Workflow
@@ -74,6 +86,11 @@ The `Makefile` provides several targets to streamline development:
 - `make proto`: Run this after editing `proto/powergrid.proto` to regenerate the gRPC code for both Swift and Go.
 - `make clean`: Removes all build artifacts and generated code to start fresh.
 - `sudo -E go run ./cmd/powergrid-daemon`: Run the daemon directly for debugging (requires root).
+
+gRPC interfaces:
+- `GetStatus`: App polling for live status (now includes `time_to_full_minutes` and `time_to_empty_minutes`).
+- `SetChargeLimit`, `SetPowerFeature`: App controls for charging limit and power assertions/force discharge.
+- `GetVersion`: Returns the daemon's `BuildID` used for offline pairing.
 
 ## How It Works
 
