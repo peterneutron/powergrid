@@ -207,7 +207,8 @@ struct MainControlsView: View {
                 status: status,
                 displayStyle: client.userIntent.menuBarDisplayStyle,
                 forceDischargeMode: client.userIntent.forceDischargeMode,
-                autoCutoff: autoCutoff
+                autoCutoff: autoCutoff,
+                userIntent: client.userIntent
             )
             Divider()
             ControlsView(client: client)
@@ -224,6 +225,7 @@ struct HeaderView: View {
     let displayStyle: MenuBarDisplayStyle
     let forceDischargeMode: ForceDischargeMode
     let autoCutoff: Int
+    let userIntent: UserIntent
     
     private var computedStatusText: String {
         let adapterPresent = Int(status.adapterMaxWatts) > 0
@@ -270,8 +272,15 @@ struct HeaderView: View {
                 
                 Spacer()
                 HStack(spacing: 10) {
+                    if let estimate = computeTimeEstimate(status: status, intent: userIntent) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "clock")
+                            Text("\(estimate.formatted)")
+                                .monospacedDigit()
+                        }
+                    }
                     HStack(spacing: 4) {
-                        Image(systemName: "cross.circle.fill")
+                        Image(systemName: "cross.circle")
                         Text("\(status.healthByMax)%")
                             .monospacedDigit()
                     }
@@ -282,7 +291,7 @@ struct HeaderView: View {
                     }
                 }
             }
-            
+        
             Divider().padding(.vertical, 2)
             
             HStack(alignment: .top) {
