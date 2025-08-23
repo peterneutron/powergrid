@@ -17,6 +17,7 @@
 		9ED532C52E41E7630014EC41 /* powergrid-helper in Copy Daemon and Helper */ = {isa = PBXBuildFile; fileRef = 9ED532C32E41E7620014EC41 /* powergrid-helper */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		9ED532C62E41E7630014EC41 /* powergrid-daemon in Copy Daemon and Helper */ = {isa = PBXBuildFile; fileRef = 9ED532C42E41E7630014EC41 /* powergrid-daemon */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		9ED532C82E41E77B0014EC41 /* com.neutronstar.powergrid.daemon.plist in Copy Daemon and Helper */ = {isa = PBXBuildFile; fileRef = 9ED532C72E41E77B0014EC41 /* com.neutronstar.powergrid.daemon.plist */; };
+		9EEF1D4E2E59FFB500A29A8B /* powergrid-daemon.buildid in Copy Daemon and Helper */ = {isa = PBXBuildFile; fileRef = 9EEF1D4D2E59FFB500A29A8B /* powergrid-daemon.buildid */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXBuildRule section */
@@ -57,6 +58,7 @@
 			dstPath = "";
 			dstSubfolderSpec = 7;
 			files = (
+				9EEF1D4E2E59FFB500A29A8B /* powergrid-daemon.buildid in Copy Daemon and Helper */,
 				9ED532C82E41E77B0014EC41 /* com.neutronstar.powergrid.daemon.plist in Copy Daemon and Helper */,
 				9ED532C52E41E7630014EC41 /* powergrid-helper in Copy Daemon and Helper */,
 				9ED532C62E41E7630014EC41 /* powergrid-daemon in Copy Daemon and Helper */,
@@ -75,6 +77,7 @@
 		9ED532C32E41E7620014EC41 /* powergrid-helper */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.executable"; name = "powergrid-helper"; path = "../../../build-go/powergrid-helper"; sourceTree = "<group>"; };
 		9ED532C42E41E7630014EC41 /* powergrid-daemon */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.executable"; name = "powergrid-daemon"; path = "../../../build-go/powergrid-daemon"; sourceTree = "<group>"; };
 		9ED532C72E41E77B0014EC41 /* com.neutronstar.powergrid.daemon.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; name = com.neutronstar.powergrid.daemon.plist; path = ../../../install/com.neutronstar.powergrid.daemon.plist; sourceTree = "<group>"; };
+		9EEF1D4D2E59FFB500A29A8B /* powergrid-daemon.buildid */ = {isa = PBXFileReference; lastKnownFileType = text; name = "powergrid-daemon.buildid"; path = "../../../build-go/powergrid-daemon.buildid"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -142,6 +145,7 @@
 		9E434EF62E40137800A33F45 = {
 			isa = PBXGroup;
 			children = (
+				9EEF1D4D2E59FFB500A29A8B /* powergrid-daemon.buildid */,
 				9E9ECFF72E4F399C0044F539 /* project.pbxproj */,
 				9ED532C72E41E77B0014EC41 /* com.neutronstar.powergrid.daemon.plist */,
 				9ED532C42E41E7630014EC41 /* powergrid-daemon */,

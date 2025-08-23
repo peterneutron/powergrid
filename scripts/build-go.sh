@@ -57,11 +57,40 @@ HELPER_SOURCE_DIR="${PROJECT_ROOT}/cmd/powergrid-helper"
 echo "--- Starting Go Compilation ---"
 mkdir -p "${BUILD_OUTPUT_DIR}"
 
-# Build steps
+# Derive daemon BuildID from git tree for cmd/powergrid-daemon, with repository-wide dirty flag
+echo "--- Computing daemon BuildID (git) ---"
+if command -v git >/dev/null 2>&1; then
+    DAEMON_BUILD_ID=$(git -C "${PROJECT_ROOT}" rev-parse --short=12 HEAD:cmd/powergrid-daemon || true)
+    # Mark as dirty if repository has any uncommitted or untracked changes (whole tree)
+    DIRTY_SUFFIX=""
+    if ! git -C "${PROJECT_ROOT}" diff --quiet -- .; then DIRTY_SUFFIX="-dirty"; fi
+    if ! git -C "${PROJECT_ROOT}" diff --cached --quiet -- .; then DIRTY_SUFFIX="-dirty"; fi
+    if [ -n "$(git -C "${PROJECT_ROOT}" ls-files --others --exclude-standard)" ]; then DIRTY_SUFFIX="-dirty"; fi
+    DAEMON_BUILD_ID="${DAEMON_BUILD_ID}${DIRTY_SUFFIX}"
+fi
+if [ -z "${DAEMON_BUILD_ID}" ]; then
+    echo "❌ ERROR: Unable to compute daemon BuildID from git. Ensure this is a git checkout." >&2
+    exit 1
+fi
+echo "Daemon BuildID: ${DAEMON_BUILD_ID}"
+
+# Build steps (stamp BuildID via ldflags)
 echo "--- Building powergrid-daemon ---"
-go build -o "${BUILD_OUTPUT_DIR}/powergrid-daemon" "${DAEMON_SOURCE_DIR}"
+go build -ldflags "-X 'main.BuildID=${DAEMON_BUILD_ID}'" -o "${BUILD_OUTPUT_DIR}/powergrid-daemon" "${DAEMON_SOURCE_DIR}"
+
+# Write sidecar BuildID file for the app bundle to read at runtime
+echo "${DAEMON_BUILD_ID}" > "${BUILD_OUTPUT_DIR}/powergrid-daemon.buildid"
+echo "Wrote sidecar: ${BUILD_OUTPUT_DIR}/powergrid-daemon.buildid"
 
 echo "--- Building powergrid-helper ---"
 go build -o "${BUILD_OUTPUT_DIR}/powergrid-helper" "${HELPER_SOURCE_DIR}"
 
 echo "✅ Go binaries built successfully."
+
+# If invoked from Xcode, also copy the sidecar into the built app's Resources
+# if [ -n "$SRCROOT" ] && [ -n "$TARGET_BUILD_DIR" ] && [ -n "$UNLOCALIZED_RESOURCES_FOLDER_PATH" ]; then
+#   DEST_DIR="${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}"
+#   mkdir -p "$DEST_DIR"
+#   cp "${BUILD_OUTPUT_DIR}/powergrid-daemon.buildid" "$DEST_DIR/"
+#   echo "✅ Copied powergrid-daemon.buildid to app Resources: $DEST_DIR"
+# fi
