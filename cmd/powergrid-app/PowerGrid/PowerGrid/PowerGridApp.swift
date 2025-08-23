@@ -629,19 +629,20 @@ struct FooterActionsView: View {
                     }
                     
                     Divider()
-                    
-                    // About: Show Build IDs
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("About").font(.headline)
-                        HStack {
-                            Text("Embedded Daemon ID:")
-                            Text(shortID(client.embeddedDaemonBuildID)).monospaced()
-                                .help(client.embeddedDaemonBuildID ?? "")
-                        }
-                        HStack {
-                            Text("Installed Daemon ID:")
-                            Text(shortID(client.installedDaemonBuildID)).monospaced()
-                                .help(client.installedDaemonBuildID ?? "")
+                    // Developer submenu (only when running a dirty build)
+                    if client.embeddedDaemonBuildID?.hasSuffix("-dirty") == true {
+                        Menu("Developer") {
+                            Text("Daemon IDs").font(.caption).foregroundStyle(.secondary)
+                            if let embedded = client.embeddedDaemonBuildID {
+                                Text("Embedded: \(shortID(embedded))")
+                                    .foregroundStyle(.secondary)
+                                    .help(embedded)
+                            }
+                            if let installed = client.installedDaemonBuildID {
+                                Text("Installed: \(shortID(installed))")
+                                    .foregroundStyle(.secondary)
+                                    .help(installed)
+                            }
                         }
                     }
                     
@@ -670,5 +671,9 @@ struct FooterActionsView: View {
 // Shorten a hex ID for display (e.g., first 12 chars)
 private func shortID(_ id: String?) -> String {
     guard let id = id, !id.isEmpty else { return "—" }
+    if id.hasSuffix("-dirty") {
+        let base = String(id.dropLast(6)) // remove "-dirty"
+        return String(base.prefix(12)) + "-dirty"
+    }
     return String(id.prefix(12))
 }
