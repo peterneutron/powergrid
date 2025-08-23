@@ -1,22 +1,22 @@
 package main
 
 import (
-	"context"
-	"net"
-	"os"
-	"os/signal"
-	"sync"
-	"syscall"
-	"time"
+    "context"
+    "net"
+    "os"
+    "os/signal"
+    "sync"
+    "syscall"
+    "time"
 
-	"google.golang.org/grpc"
+    "google.golang.org/grpc"
 
-	"github.com/peterneutron/powerkit-go/pkg/powerkit"
+    "github.com/peterneutron/powerkit-go/pkg/powerkit"
 
-	rpc "powergrid/generated/go"
-	cfg "powergrid/internal/config"
-	consoleuser "powergrid/internal/consoleuser"
-	oslogger "powergrid/internal/oslogger"
+    rpc "powergrid/generated/go"
+    cfg "powergrid/internal/config"
+    consoleuser "powergrid/internal/consoleuser"
+    oslogger "powergrid/internal/oslogger"
 )
 
 const (
@@ -27,19 +27,22 @@ const (
 
 var logger = oslogger.NewLogger(logSubsystem, "Daemon")
 
-type powerGridServer struct {
-	rpc.UnimplementedPowerGridServer
+// BuildID is stamped at build time via -ldflags "-X main.BuildID=<id>"
+var BuildID string
 
-	mu                      sync.RWMutex
-	currentLimit            int32
+type powerGridServer struct {
+    rpc.UnimplementedPowerGridServer
+
+    mu                      sync.RWMutex
+    currentLimit            int32
 	lastIOKitStatus         *powerkit.IOKitData
 	lastSMCStatus           *powerkit.SMCData
 	lastBatteryWattage      float32
 	lastAdapterWattage      float32
 	lastSystemWattage       float32
 	currentConsoleUser      *consoleuser.ConsoleUser
-	wantPreventDisplaySleep bool
-	wantPreventSystemSleep  bool
+    wantPreventDisplaySleep bool
+    wantPreventSystemSleep  bool
 }
 
 func (s *powerGridServer) GetStatus(_ context.Context, _ *rpc.Empty) (*rpc.StatusResponse, error) {
@@ -81,6 +84,10 @@ func (s *powerGridServer) GetStatus(_ context.Context, _ *rpc.Empty) (*rpc.Statu
 		resp.SmcAdapterEnabled = s.lastSMCStatus.State.IsAdapterEnabled
 	}
 	return resp, nil
+}
+
+func (s *powerGridServer) GetVersion(_ context.Context, _ *rpc.Empty) (*rpc.VersionResponse, error) {
+    return &rpc.VersionResponse{BuildId: BuildID}, nil
 }
 
 func (s *powerGridServer) SetChargeLimit(_ context.Context, req *rpc.SetChargeLimitRequest) (*rpc.Empty, error) {
@@ -403,9 +410,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	grpcServer := grpc.NewServer()
-	server := &powerGridServer{currentLimit: defaultChargeLimit}
-	rpc.RegisterPowerGridServer(grpcServer, server)
+    grpcServer := grpc.NewServer()
+    server := &powerGridServer{currentLimit: defaultChargeLimit}
+    rpc.RegisterPowerGridServer(grpcServer, server)
 
 	server.startConsoleUserEventHandler()
 

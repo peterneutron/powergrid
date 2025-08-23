@@ -52,6 +52,9 @@ struct MenuBarLabelView: View {
             case .uninstalling:
                 Text("PG")
                 Image(systemName: "arrow.triangle.2.circlepath")
+            case .upgradeAvailable:
+                Text("PG")
+                Image(systemName: "arrow.triangle.2.circlepath")
                 
             case .installed:
                 switch client.connectionState {
@@ -135,7 +138,7 @@ struct AppMenuView: View {
             case .uninstalling:
                 ProgressView { Text("Uninstalling daemon...") }
                 
-            case .notInstalled, .failed:
+            case .notInstalled, .failed, .upgradeAvailable:
                 InstallationView(client: client)
                 
             case .installed:
@@ -164,10 +167,14 @@ struct InstallationView: View {
     
     var body: some View {
         VStack(spacing: 12) {
-            Text("PowerGrid Daemon Required")
+            Text(client.installerState == .upgradeAvailable ? "PowerGrid Daemon Upgrade Available" : "PowerGrid Daemon Required")
                 .font(.title2).bold()
             
-            Text("To manage your Mac's charging, PowerGrid needs to install a small helper daemon that runs in the background as root.")
+            Text(client.installerState == .upgradeAvailable
+                 ? (client.embeddedDaemonBuildID?.hasSuffix("-dirty") == true
+                    ? "Dev build detected (dirty). You can upgrade now or skip to use the installed daemon."
+                    : "A newer daemon is bundled with this app. Upgrade to keep features in sync.")
+                 : "To manage your Mac's charging, PowerGrid needs to install a small helper daemon that runs in the background as root.")
                 .font(.callout)
             
             if case .failed(let errorMessage) = client.installerState {
@@ -176,12 +183,20 @@ struct InstallationView: View {
                     .font(.caption)
             }
             
-            Button("Install Daemon") {
+            Button(client.installerState == .upgradeAvailable ? "Upgrade Daemon" : "Install Daemon") {
                 Task {
                     await client.installDaemon()
                 }
             }
             .buttonStyle(.borderedProminent)
+            
+            if client.installerState == .upgradeAvailable {
+                Button("Skip for now") {
+                    // Session-only skip: continue with existing daemon
+                    client.setSkipUpgradeForSession()
+                }
+                .buttonStyle(.bordered)
+            }
             
             Divider()
             
@@ -274,18 +289,18 @@ struct HeaderView: View {
                 HStack(spacing: 10) {
                     if let estimate = computeTimeEstimate(status: status, intent: userIntent) {
                         HStack(spacing: 4) {
-                            Image(systemName: "clock")
+                            Image(systemName: "clock.fill")
                             Text("\(estimate.formatted)")
                                 .monospacedDigit()
                         }
                     }
                     HStack(spacing: 4) {
-                        Image(systemName: "cross.circle")
+                        Image(systemName: "cross.circle.fill")
                         Text("\(status.healthByMax)%")
                             .monospacedDigit()
                     }
                     HStack(spacing: 4) {
-                        Image(systemName: "arrow.trianglehead.2.clockwise")
+                        Image(systemName: "arrow.trianglehead.2.clockwise.rotate.90.circle.fill")
                         Text("\(status.cycleCount)")
                             .monospacedDigit()
                     }
@@ -615,6 +630,23 @@ struct FooterActionsView: View {
                     
                     Divider()
                     
+                    // About: Show Build IDs
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("About").font(.headline)
+                        HStack {
+                            Text("Embedded Daemon ID:")
+                            Text(shortID(client.embeddedDaemonBuildID)).monospaced()
+                                .help(client.embeddedDaemonBuildID ?? "")
+                        }
+                        HStack {
+                            Text("Installed Daemon ID:")
+                            Text(shortID(client.installedDaemonBuildID)).monospaced()
+                                .help(client.installedDaemonBuildID ?? "")
+                        }
+                    }
+                    
+                    Divider()
+
                     Button(role: .destructive) {
                         Task.detached(priority: .userInitiated) {
                             await client.uninstallDaemon()
@@ -633,4 +665,10 @@ struct FooterActionsView: View {
             }
         }
     }
+}
+
+// Shorten a hex ID for display (e.g., first 12 chars)
+private func shortID(_ id: String?) -> String {
+    guard let id = id, !id.isEmpty else { return "—" }
+    return String(id.prefix(12))
 }

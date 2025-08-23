@@ -49,6 +49,7 @@ struct UserIntent: Equatable {
             case installing
             case uninstalling
             case installed
+            case upgradeAvailable
             case failed(String)
         }
         
@@ -67,6 +68,9 @@ struct UserIntent: Equatable {
         private var prevIntent: UserIntent?
         private let rules = RulesEngine()
         private var autoArmed = false // Auto is engaged (Auto selected AND FD active)
+        @Published private(set) var embeddedDaemonBuildID: String?
+        @Published private(set) var installedDaemonBuildID: String?
+        private var skipUpgradeThisSession = false
         
         init() {
             if let savedValue = UserDefaults.standard.string(forKey: "menuBarDisplayStyle"),
@@ -128,6 +132,32 @@ struct UserIntent: Equatable {
             }
             
             do {
+                // On first fetch, perform daemon version check once
+                if self.embeddedDaemonBuildID == nil {
+                    await computeEmbeddedBuildID()
+                    do {
+                        let ver = try await client.getVersion(Rpc_Empty())
+                        self.installedDaemonBuildID = ver.buildID
+                    } catch {
+                        // Older daemon without GetVersion RPC: treat as upgrade available
+                        if let rpcError = error as? GRPCCore.RPCError, rpcError.code == .unimplemented {
+                            self.installedDaemonBuildID = nil
+                            if self.embeddedDaemonBuildID != nil {
+                                self.installerState = .upgradeAvailable
+                            }
+                        } else {
+                            // Leave as is; we won't force upgrade on other errors
+                            self.installedDaemonBuildID = nil
+                        }
+                    }
+                    // If embedded build is a dev/dirty build, prompt upgrade regardless, unless skipped
+                    if let local = self.embeddedDaemonBuildID, local.hasSuffix("-dirty"), !self.skipUpgradeThisSession {
+                        self.installerState = .upgradeAvailable
+                    } else if let local = self.embeddedDaemonBuildID, let remote = self.installedDaemonBuildID, local != remote, !self.skipUpgradeThisSession {
+                        self.installerState = .upgradeAvailable
+                    }
+                }
+
                 let response = try await client.getStatus(Rpc_Empty())
                 self.status = response
                 // Snapshot previous intent at the start of this tick for rules evaluation
@@ -200,7 +230,7 @@ struct UserIntent: Equatable {
 
                 if connectionState != .connected {
                     connectionState = .connected
-                    installerState = .installed
+                    if installerState != .upgradeAvailable { installerState = .installed }
                 }
             } catch {
                 if let rpcError = error as? GRPCCore.RPCError {
@@ -218,6 +248,20 @@ struct UserIntent: Equatable {
                 if self.installerState != .installing {
                     installerState = .notInstalled
                 }
+            }
+        }
+        
+        private func computeEmbeddedBuildID() async {
+            if let path = Bundle.main.path(forResource: "powergrid-daemon", ofType: "buildid") {
+                do {
+                    var id = try String(contentsOfFile: path, encoding: .utf8)
+                    id = id.trimmingCharacters(in: .whitespacesAndNewlines)
+                    self.embeddedDaemonBuildID = id.isEmpty ? nil : id
+                } catch {
+                    print("Failed to read embedded daemon BuildID: \(error)")
+                }
+            } else {
+                print("Embedded daemon BuildID file not found in bundle resources.")
             }
         }
         
@@ -286,6 +330,7 @@ struct UserIntent: Equatable {
                 try? await Task.sleep(for: .seconds(2))
                 self.connect()
                 await self.fetchStatus()
+                await self.updateVersionIDsAfterInstall()
             } else {
                 if let errorInfo = errorDict {
                     let errorMessage = errorInfo["NSAppleScriptErrorMessage"] as? String ?? "An unknown AppleScript error occurred."
@@ -295,6 +340,38 @@ struct UserIntent: Equatable {
                     self.installerState = .failed("An unknown error occurred during installation.")
                     log("Daemon installation failed.")
                 }
+            }
+        }
+
+        private func updateVersionIDsAfterInstall() async {
+            // Ensure embedded ID is available
+            if self.embeddedDaemonBuildID == nil {
+                await computeEmbeddedBuildID()
+            }
+            guard let client = self.client else { return }
+            do {
+                let ver = try await client.getVersion(Rpc_Empty())
+                self.installedDaemonBuildID = ver.buildID
+                if let local = self.embeddedDaemonBuildID, local == ver.buildID {
+                    self.installerState = .installed
+                } else {
+                    self.installerState = .upgradeAvailable
+                }
+            } catch {
+                // If version RPC still fails, leave IDs as-is; user can try again later
+                print("Post-install GetVersion failed: \(error)")
+            }
+        }
+
+        // Allow user to skip upgrade prompts for this app session (e.g., dirty dev builds)
+        func setSkipUpgradeForSession() {
+            self.skipUpgradeThisSession = true
+            // If we're currently showing the installer/upgrade view, switch to installed state
+            if self.connectionState == .connected {
+                self.installerState = .installed
+            } else {
+                // We may not be connected yet; still move out of upgrade gate
+                self.installerState = .installed
             }
         }
         
