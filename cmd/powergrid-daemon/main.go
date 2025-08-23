@@ -65,6 +65,8 @@ func (s *powerGridServer) GetStatus(_ context.Context, _ *rpc.Empty) (*rpc.Statu
 		HealthByMax:               int32(s.lastIOKitStatus.Calculations.HealthByMaxCapacity),
 		AdapterInputVoltage:       float32(s.lastIOKitStatus.Adapter.InputVoltage),
 		AdapterInputAmperage:      float32(s.lastIOKitStatus.Adapter.InputAmperage),
+		TimeToFullMinutes:         int32(s.lastIOKitStatus.Battery.TimeToFull),
+		TimeToEmptyMinutes:        int32(s.lastIOKitStatus.Battery.TimeToEmpty),
 		PreventDisplaySleepActive: s.wantPreventDisplaySleep,
 		PreventSystemSleepActive:  s.wantPreventSystemSleep,
 		ForceDischargeActive: func() bool {

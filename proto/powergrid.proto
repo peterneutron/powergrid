@@ -31,6 +31,8 @@ message StatusResponse {
   bool smc_charging_enabled = 17;         // SMC.State.IsChargingEnabled
   bool smc_adapter_enabled = 18;          // SMC.State.IsAdapterEnabled
   int32 adapter_max_watts = 19;           // IOKit.Adapter.MaxWatts (W)
+  int32 time_to_full_minutes = 20;        // IOKit.Battery.TimeToFull (minutes)
+  int32 time_to_empty_minutes = 21;       // IOKit.Battery.TimeToEmpty (minutes)
 }
 
 message SetChargeLimitRequest {
