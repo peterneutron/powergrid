@@ -75,36 +75,39 @@ func EffectiveChargeLimit(userLimit, systemLimit, defaultLimit int) int {
 }
 
 type jsonConfig struct {
-	ChargeLimit int `json:"charge_limit"`
+    ChargeLimit      int  `json:"charge_limit"`
+    ControlMagsafeLED bool `json:"control_magsafe_led,omitempty"`
 }
 
 func ensureDir(dir string) error {
 	return os.MkdirAll(dir, 0755)
 }
 
-func readJSONLimit(path string) int {
-	b, err := os.ReadFile(path)
-	if err != nil {
-		return 0
-	}
-	var cfg jsonConfig
-	if err := json.Unmarshal(b, &cfg); err != nil {
-		return 0
-	}
-	return clampLimit(cfg.ChargeLimit)
+func readJSON(path string) (jsonConfig, error) {
+    b, err := os.ReadFile(path)
+    if err != nil {
+        return jsonConfig{}, err
+    }
+    var cfg jsonConfig
+    if err := json.Unmarshal(b, &cfg); err != nil {
+        return jsonConfig{}, err
+    }
+    cfg.ChargeLimit = clampLimit(cfg.ChargeLimit)
+    return cfg, nil
 }
 
-func writeJSONLimit(path string, limit int) error {
-	if err := ensureDir(filepath.Dir(path)); err != nil {
-		return err
-	}
-	tmp := path + ".tmp"
-	b, err := json.MarshalIndent(jsonConfig{ChargeLimit: clampLimit(limit)}, "", "  ")
-	if err != nil {
-		return err
-	}
-	if err := os.WriteFile(tmp, b, 0644); err != nil {
-		return err
+func writeJSON(path string, cfg jsonConfig) error {
+    if err := ensureDir(filepath.Dir(path)); err != nil {
+        return err
+    }
+    tmp := path + ".tmp"
+    cfg.ChargeLimit = clampLimit(cfg.ChargeLimit)
+    b, err := json.MarshalIndent(cfg, "", "  ")
+    if err != nil {
+        return err
+    }
+    if err := os.WriteFile(tmp, b, 0644); err != nil {
+        return err
 	}
 	if err := os.Rename(tmp, path); err != nil {
 		_ = os.Remove(tmp)
@@ -114,30 +117,39 @@ func writeJSONLimit(path string, limit int) error {
 }
 
 func EnsureSystemConfig(defaultLimit int) error {
-	if fi, err := os.Stat(SystemConfigPath); err == nil && !fi.IsDir() {
-		return nil
-	}
-	return writeJSONLimit(SystemConfigPath, defaultLimit)
+    if fi, err := os.Stat(SystemConfigPath); err == nil && !fi.IsDir() {
+        return nil
+    }
+    return writeJSON(SystemConfigPath, jsonConfig{ChargeLimit: defaultLimit})
 }
 
 func ReadSystemChargeLimitStore() int {
-	return readJSONLimit(SystemConfigPath)
+    if cfg, err := readJSON(SystemConfigPath); err == nil {
+        return cfg.ChargeLimit
+    }
+    return 0
 }
 
 func ReadUserChargeLimitStore(uid uint32) int {
-	if uid == 0 {
-		return 0
-	}
-	path := filepath.Join(UsersConfigDir, fmt.Sprintf("%d.json", uid))
-	return readJSONLimit(path)
+    if uid == 0 {
+        return 0
+    }
+    path := filepath.Join(UsersConfigDir, fmt.Sprintf("%d.json", uid))
+    if cfg, err := readJSON(path); err == nil {
+        return cfg.ChargeLimit
+    }
+    return 0
 }
 
 func WriteUserChargeLimitStore(uid uint32, limit int) error {
-	if uid == 0 {
-		return os.ErrInvalid
-	}
-	path := filepath.Join(UsersConfigDir, fmt.Sprintf("%d.json", uid))
-	return writeJSONLimit(path, limit)
+    if uid == 0 {
+        return os.ErrInvalid
+    }
+    path := filepath.Join(UsersConfigDir, fmt.Sprintf("%d.json", uid))
+    // Preserve other fields if present
+    cfg, _ := readJSON(path)
+    cfg.ChargeLimit = limit
+    return writeJSON(path, cfg)
 }
 
 func runDefaultsRead(domainOrPath, key string, env []string) (string, error) {
@@ -156,7 +168,7 @@ func runDefaultsRead(domainOrPath, key string, env []string) (string, error) {
 }
 
 func WriteUserChargeLimit(homeDir string, uid uint32, limit int) error {
-	return WriteUserChargeLimitStore(uid, limit)
+    return WriteUserChargeLimitStore(uid, limit)
 }
 
 func runDefaultsWrite(domainOrPath, key string, intValue int, env []string) error {
@@ -168,4 +180,31 @@ func runDefaultsWrite(domainOrPath, key string, intValue int, env []string) erro
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	return cmd.Run()
+}
+
+// MagSafe LED preference (per-user)
+
+func ReadUserMagsafeLEDStore(uid uint32) bool {
+    if uid == 0 {
+        return false
+    }
+    path := filepath.Join(UsersConfigDir, fmt.Sprintf("%d.json", uid))
+    if cfg, err := readJSON(path); err == nil {
+        return cfg.ControlMagsafeLED
+    }
+    return false
+}
+
+func WriteUserMagsafeLEDStore(uid uint32, enabled bool) error {
+    if uid == 0 {
+        return os.ErrInvalid
+    }
+    path := filepath.Join(UsersConfigDir, fmt.Sprintf("%d.json", uid))
+    cfg, _ := readJSON(path)
+    cfg.ControlMagsafeLED = enabled
+    if cfg.ChargeLimit == 0 {
+        // keep a sane default if not set yet
+        cfg.ChargeLimit = 80
+    }
+    return writeJSON(path, cfg)
 }

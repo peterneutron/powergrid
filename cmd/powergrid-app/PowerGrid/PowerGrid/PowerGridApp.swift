@@ -615,6 +615,16 @@ struct FooterActionsView: View {
                             Text("Display sleep prevention implies system sleep prevention.")
                                 .font(.caption).foregroundStyle(.secondary)
                         }
+
+                        Toggle("Control MagSafe LED", isOn: $client.userIntent.controlMagsafeLED)
+                            .disabled(!(client.status?.magsafeLedSupported ?? false))
+                            .onChange(of: client.userIntent.controlMagsafeLED) { _, newValue in
+                                Task { await client.setPowerFeature(feature: .controlMagsafeLed, enable: newValue) }
+                            }
+                        if !(client.status?.magsafeLedSupported ?? false) {
+                            Text("MagSafe LED control not supported on this hardware.")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
                     }
                     
                     //Toggle("Force Discharge", isOn: $client.userIntent.forceDischarge)

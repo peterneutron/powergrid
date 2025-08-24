@@ -43,6 +43,9 @@ type powerGridServer struct {
 	currentConsoleUser      *consoleuser.ConsoleUser
     wantPreventDisplaySleep bool
     wantPreventSystemSleep  bool
+    wantMagsafeLED          bool
+    ledSupported            bool
+    lastLEDState            powerkit.MagsafeLEDState
 }
 
 func (s *powerGridServer) GetStatus(_ context.Context, _ *rpc.Empty) (*rpc.StatusResponse, error) {
@@ -79,11 +82,13 @@ func (s *powerGridServer) GetStatus(_ context.Context, _ *rpc.Empty) (*rpc.Statu
 			return false
 		}(),
 	}
-	if s.lastSMCStatus != nil {
-		resp.SmcChargingEnabled = s.lastSMCStatus.State.IsChargingEnabled
-		resp.SmcAdapterEnabled = s.lastSMCStatus.State.IsAdapterEnabled
-	}
-	return resp, nil
+    if s.lastSMCStatus != nil {
+        resp.SmcChargingEnabled = s.lastSMCStatus.State.IsChargingEnabled
+        resp.SmcAdapterEnabled = s.lastSMCStatus.State.IsAdapterEnabled
+    }
+    resp.MagsafeLedControlActive = s.wantMagsafeLED
+    resp.MagsafeLedSupported = s.ledSupported
+    return resp, nil
 }
 
 func (s *powerGridServer) GetVersion(_ context.Context, _ *rpc.Empty) (*rpc.VersionResponse, error) {
@@ -119,7 +124,7 @@ func (s *powerGridServer) SetChargeLimit(_ context.Context, req *rpc.SetChargeLi
 }
 
 func (s *powerGridServer) SetPowerFeature(_ context.Context, req *rpc.SetPowerFeatureRequest) (*rpc.Empty, error) {
-	switch req.GetFeature() {
+    switch req.GetFeature() {
 	case rpc.PowerFeature_PREVENT_DISPLAY_SLEEP:
 		s.mu.Lock()
 		s.wantPreventDisplaySleep = req.GetEnable()
@@ -142,7 +147,7 @@ func (s *powerGridServer) SetPowerFeature(_ context.Context, req *rpc.SetPowerFe
 		} else {
 			powerkit.ReleaseAssertion(powerkit.AssertionTypePreventSystemSleep)
 		}
-	case rpc.PowerFeature_FORCE_DISCHARGE:
+    case rpc.PowerFeature_FORCE_DISCHARGE:
 		if req.GetEnable() {
 			if err := powerkit.SetAdapterState(powerkit.AdapterActionOff); err != nil {
 				logger.Error("Failed to force discharge (adapter off): %v", err)
@@ -152,7 +157,27 @@ func (s *powerGridServer) SetPowerFeature(_ context.Context, req *rpc.SetPowerFe
 				logger.Error("Failed to re-enable adapter: %v", err)
 			}
 		}
-	}
+    case rpc.PowerFeature_CONTROL_MAGSAFE_LED:
+        s.mu.Lock()
+        enable := req.GetEnable()
+        if !s.ledSupported && enable {
+            logger.Default("MagSafe LED control not supported on this hardware.")
+        } else {
+            s.wantMagsafeLED = enable
+            if s.currentConsoleUser != nil {
+                _ = cfg.WriteUserMagsafeLEDStore(s.currentConsoleUser.UID, enable)
+            }
+        }
+        s.mu.Unlock()
+        // On disable, hand control back to system immediately
+        if !enable && s.ledSupported {
+            if err := powerkit.SetMagsafeLEDState(powerkit.LEDSystem); err != nil {
+                logger.Error("Failed to return MagSafe LED to system control: %v", err)
+            } else {
+                s.lastLEDState = powerkit.LEDSystem
+            }
+        }
+    }
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -189,30 +214,33 @@ func (s *powerGridServer) runChargingLogicLocked(info *powerkit.SystemInfo) {
 		s.lastSystemWattage = float32(info.IOKit.Calculations.SystemPower)
 	}
 
-	if info.IOKit == nil || info.SMC == nil {
-		logger.Default("Skipping logic run due to incomplete data.")
-		return
-	}
+    if info.IOKit == nil || info.SMC == nil {
+        logger.Default("Skipping logic run due to incomplete data.")
+        return
+    }
 
 	charge := info.IOKit.Battery.CurrentCharge
 	limit := int(s.currentLimit)
 	isSMCChargingEnabled := info.SMC.State.IsChargingEnabled
 
-	if charge >= limit && isSMCChargingEnabled {
+    if charge >= limit && isSMCChargingEnabled {
 		logger.Default("Charge %d%% >= Limit %d%%. Disabling charging.", charge, limit)
 		if err := powerkit.SetChargingState(powerkit.ChargingActionOff); err != nil {
 			logger.Error("Failed to disable charging: %v", err)
 		} else {
 			logger.Default("Successfully disabled charging.")
 		}
-	} else if charge < limit && !isSMCChargingEnabled {
+    } else if charge < limit && !isSMCChargingEnabled {
 		logger.Default("Charge %d%% < Limit %d%%. Re-enabling charging.", charge, limit)
 		if err := powerkit.SetChargingState(powerkit.ChargingActionOn); err != nil {
 			logger.Error("Failed to enable charging: %v", err)
 		} else {
 			logger.Default("Successfully enabled charging.")
-		}
-	}
+        }
+    }
+
+    // Apply MagSafe LED if requested and supported
+    s.applyMagsafeLED(info)
 }
 
 func (s *powerGridServer) startEventStream() {
@@ -322,8 +350,9 @@ func (s *powerGridServer) handleConsoleUserChange(_ interface{}) {
 func (s *powerGridServer) enterNoUser() {
 	s.mu.Lock()
 	s.currentConsoleUser = nil
-	s.wantPreventDisplaySleep = false
-	s.wantPreventSystemSleep = false
+    s.wantPreventDisplaySleep = false
+    s.wantPreventSystemSleep = false
+    s.wantMagsafeLED = false
 	s.mu.Unlock()
 
 	logger.Default("Entering NoUser state: clearing assertions, enabling adapter, applying system/effective limit")
@@ -332,6 +361,13 @@ func (s *powerGridServer) enterNoUser() {
 	if err := powerkit.SetAdapterState(powerkit.AdapterActionOn); err != nil {
 		logger.Error("Failed to ensure adapter ON in NoUser: %v", err)
 	}
+    if s.ledSupported {
+        if err := powerkit.SetMagsafeLEDState(powerkit.LEDSystem); err != nil {
+            logger.Info("Could not set MagSafe LED to system in NoUser: %v", err)
+        } else {
+            s.lastLEDState = powerkit.LEDSystem
+        }
+    }
 
 	systemLimit := cfg.ReadSystemChargeLimitStore()
 	if systemLimit == 0 {
@@ -349,8 +385,9 @@ func (s *powerGridServer) enterNoUser() {
 func (s *powerGridServer) enterConsoleUser(u *consoleuser.ConsoleUser) {
 	s.mu.Lock()
 	s.currentConsoleUser = u
-	s.wantPreventDisplaySleep = false
-	s.wantPreventSystemSleep = false
+    s.wantPreventDisplaySleep = false
+    s.wantPreventSystemSleep = false
+    s.wantMagsafeLED = cfg.ReadUserMagsafeLEDStore(u.UID)
 	s.mu.Unlock()
 
 	logger.Default("Entering ConsoleUser state (%s): clearing assertions, enabling adapter, applying effective limit", u.Username)
@@ -373,7 +410,7 @@ func (s *powerGridServer) enterConsoleUser(u *consoleuser.ConsoleUser) {
 	s.mu.Unlock()
 	logger.Default("Applied effective limit for %s: %d%% (user=%d, system=%d, default=%d)", u.Username, effective, userLimit, systemLimit, defaultChargeLimit)
 
-	go s.runChargingLogic(nil)
+    go s.runChargingLogic(nil)
 }
 
 func (s *powerGridServer) handleSleep() {
@@ -414,9 +451,9 @@ func main() {
     server := &powerGridServer{currentLimit: defaultChargeLimit}
     rpc.RegisterPowerGridServer(grpcServer, server)
 
-	server.startConsoleUserEventHandler()
+    server.startConsoleUserEventHandler()
 
-	go server.startEventStream()
+    go server.startEventStream()
 
 	go func() {
 		ticker := time.NewTicker(15 * time.Second)
@@ -432,7 +469,25 @@ func main() {
 		}
 	}()
 
-	logger.Default("PowerGrid Daemon is running.")
+    logger.Default("PowerGrid Daemon is running.")
+
+    // Probe MagSafe LED capability once after start
+    go func() {
+        if powerkit.IsMagsafeAvailable() {
+            server.mu.Lock()
+            server.ledSupported = true
+            server.mu.Unlock()
+            logger.Default("MagSafe LED control supported on this hardware.")
+            // Ensure safe default on boot
+            if err := powerkit.SetMagsafeLEDState(powerkit.LEDSystem); err != nil {
+                logger.Info("Could not set MagSafe LED to system on startup: %v", err)
+            } else {
+                server.lastLEDState = powerkit.LEDSystem
+            }
+        } else {
+            logger.Default("MagSafe LED not supported or not present.")
+        }
+    }()
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
@@ -444,4 +499,65 @@ func main() {
 		logger.Error("Failed to remove socket on shutdown: %v", err)
 
 	}
+}
+
+func (s *powerGridServer) applyMagsafeLED(info *powerkit.SystemInfo) {
+    if !s.wantMagsafeLED || !s.ledSupported {
+        return
+    }
+    // Adapter presence heuristic
+    adapterPresent := info.IOKit != nil && info.IOKit.Adapter.MaxWatts > 0
+    if !adapterPresent {
+        return
+    }
+    charge := info.IOKit.Battery.CurrentCharge
+    limit := int(s.currentLimit)
+    isCharging := info.IOKit.State.IsCharging
+    isConnected := info.IOKit.State.IsConnected
+    smcChargingEnabled := info.SMC.State.IsChargingEnabled
+    forceDischarge := !info.SMC.State.IsAdapterEnabled
+
+    // Prioritize low battery alarm
+    var target powerkit.MagsafeLEDState
+    if charge <= 10 {
+        target = powerkit.LEDErrorPermSlow
+    } else if forceDischarge {
+        target = powerkit.LEDOff
+    } else if limit >= 100 {
+        if isConnected && charge >= 99 {
+            target = powerkit.LEDGreen
+        } else if isCharging {
+            target = powerkit.LEDAmber
+        } else {
+            target = powerkit.LEDOff
+        }
+    } else { // limited: treat reaching limit as "full" (green)
+        if isCharging && smcChargingEnabled && charge < limit {
+            target = powerkit.LEDAmber
+        } else {
+            // Paused at/above limit or not charging while at limit => Green
+            target = powerkit.LEDGreen
+        }
+    }
+
+    if target == s.lastLEDState {
+        return
+    }
+    if err := powerkit.SetMagsafeLEDState(target); err != nil {
+        logger.Error("Failed to set MagSafe LED: %v", err)
+        return
+    }
+    s.lastLEDState = target
+    switch target {
+    case powerkit.LEDAmber:
+        logger.Info("MagSafe LED -> Amber")
+    case powerkit.LEDGreen:
+        logger.Info("MagSafe LED -> Green")
+    case powerkit.LEDOff:
+        logger.Info("MagSafe LED -> Off")
+    case powerkit.LEDErrorPermSlow:
+        logger.Info("MagSafe LED -> Error (Perm Slow)")
+    case powerkit.LEDSystem:
+        logger.Info("MagSafe LED -> System")
+    }
 }
