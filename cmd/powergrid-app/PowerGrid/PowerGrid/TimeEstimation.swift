@@ -27,21 +27,21 @@ func computeTimeEstimate(status: Rpc_StatusResponse, intent: UserIntent) -> Time
     let limit = Int(status.chargeLimit)
     let smcChargingEnabled = status.smcChargingEnabled
 
-    // Hide when paused at/above target or full
+    // Hide when truly full
     let target = (limit < 100) ? limit : 100
-    if !status.isCharging && charge >= target { return nil }
     if status.isConnected && charge >= 100 { return nil }
-    if !smcChargingEnabled { return nil }
 
     // Discharging (on battery or forced discharge)
     if !status.isCharging {
+        // If connected but charging is disabled at/above the target (paused at limit), don't show TTE
+        if status.isConnected && !smcChargingEnabled && charge >= target { return nil }
         let tte = Int(status.timeToEmptyMinutes)
         if tte > 0, tte < 24 * 60 { return TimeEstimate(kind: .toEmpty, minutes: tte) }
         return nil
     }
 
     // Charging: require adapter present and below target
-    guard adapterPresent, charge < target else { return nil }
+    guard adapterPresent, smcChargingEnabled, charge < target else { return nil }
     let rawTTF = Int(status.timeToFullMinutes)
     guard rawTTF > 0, rawTTF < 24 * 60 else { return nil }
 
@@ -55,4 +55,3 @@ func computeTimeEstimate(status: Rpc_StatusResponse, intent: UserIntent) -> Time
 
     return TimeEstimate(kind: .toFull, minutes: rawTTF)
 }
-
