@@ -24,6 +24,7 @@ struct UserIntent: Equatable {
     var preferredChargeLimit: Int = 80
     var preventDisplaySleep: Bool = false
     var preventSystemSleep: Bool = false
+    var controlMagsafeLED: Bool = false
     var forceDischargeMode: ForceDischargeMode = .off
     var menuBarDisplayStyle: MenuBarDisplayStyle = .iconAndText
 }
@@ -198,6 +199,7 @@ struct UserIntent: Equatable {
                     preferredChargeLimit: (response.chargeLimit < 100 ? Int(response.chargeLimit) : self.userIntent.preferredChargeLimit),
                     preventDisplaySleep: response.preventDisplaySleepActive,
                     preventSystemSleep: response.preventSystemSleepActive,
+                    controlMagsafeLED: response.magsafeLedControlActive,
                     forceDischargeMode: newFDMode,
                     menuBarDisplayStyle: self.userIntent.menuBarDisplayStyle
                 )

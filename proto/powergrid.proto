@@ -34,6 +34,8 @@ message StatusResponse {
   int32 adapter_max_watts = 19;           // IOKit.Adapter.MaxWatts (W)
   int32 time_to_full_minutes = 20;        // IOKit.Battery.TimeToFull (minutes)
   int32 time_to_empty_minutes = 21;       // IOKit.Battery.TimeToEmpty (minutes)
+  bool  magsafe_led_control_active = 22;  // Whether daemon is controlling MagSafe LED
+  bool  magsafe_led_supported = 23;       // Hardware supports MagSafe LED control
 }
 
 message SetChargeLimitRequest {
@@ -45,6 +47,7 @@ enum PowerFeature {
   PREVENT_DISPLAY_SLEEP = 1;
   PREVENT_SYSTEM_SLEEP = 2;
   FORCE_DISCHARGE = 3;
+  CONTROL_MAGSAFE_LED = 4;
 }
 
 message SetPowerFeatureRequest {

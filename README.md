@@ -28,6 +28,12 @@ PowerGrid is a macOS power management tool composed of:
 - Force Discharge Automatic: Discharges to your limit, then auto-disables; only selectable above limit.
 - Native Notifications: Alerts for key events (e.g., cutoff), single permission prompt.
 - Installer flow to install/uninstall the helper daemon with administrator privileges.
+- MagSafe LED Control (optional): When enabled in Advanced Options (and supported by hardware), the daemon reflects charging modes on the MagSafe LED.
+  - Charging (limit off or below limit): Amber
+  - Fully charged or at/above user limit: Green
+  - Force Discharge: Off
+  - Low battery (≤10%): Error (slow) pattern
+  - Safe default: when disabled or on startup, LED is returned to System control
 
 ### Offline Daemon Pairing and Upgrades
 
@@ -91,6 +97,12 @@ gRPC interfaces:
 - `GetStatus`: App polling for live status (now includes `time_to_full_minutes` and `time_to_empty_minutes`).
 - `SetChargeLimit`, `SetPowerFeature`: App controls for charging limit and power assertions/force discharge.
 - `GetVersion`: Returns the daemon's `BuildID` used for offline pairing.
+
+### MagSafe LED Control
+
+- Availability: Only on hardware with MagSafe LED. The app detects support and greys out the toggle with a caption when unsupported.
+- Toggle: Advanced Options → "Control MagSafe LED". The preference is persisted per-user and applied by the daemon across restarts.
+- Behavior: When enabled and an adapter is present, the daemon sets the LED per state mapping above; when disabled, it writes System control back to firmware.
 
 ## How It Works
 
