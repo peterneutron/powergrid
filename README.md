@@ -27,6 +27,7 @@ PowerGrid is a macOS power management tool composed of:
 - Force Discharge: Discharges even when an adapter is present.
 - Force Discharge Automatic: Discharges to your limit, then auto-disables; only selectable above limit.
 - Native Notifications: Alerts for key events (e.g., cutoff), single permission prompt.
+- Low Power Notifications: Optional alerts at 20% and 10% while discharging; includes an action button to enable macOS Low Power Mode when off.
 - Installer flow to install/uninstall the helper daemon with administrator privileges.
 - MagSafe LED Control (optional): When enabled in Advanced Options (and supported by hardware), the daemon reflects charging modes on the MagSafe LED.
   - Charging (limit off or below limit): Amber
@@ -34,6 +35,12 @@ PowerGrid is a macOS power management tool composed of:
   - Force Discharge: Off
   - Low battery (≤10%): Error (slow) pattern
   - Safe default: when disabled or on startup, LED is returned to System control
+
+### Low Power Mode
+
+- Toggle macOS Low Power Mode (system-wide) via the daemon. The app includes a “Low Power Notifications” toggle in Advanced Options.
+- When enabled, the app posts alerts at 20% and 10% while discharging (debounced with hysteresis), each offering an “Enable Low Power Mode” action if it’s currently off.
+- Status includes `low_power_mode_enabled` so the app can hide the action when already enabled.
 
 ### Offline Daemon Pairing and Upgrades
 
@@ -95,8 +102,13 @@ The `Makefile` provides several targets to streamline development:
 
 gRPC interfaces:
 - `GetStatus`: App polling for live status (now includes `time_to_full_minutes` and `time_to_empty_minutes`).
-- `SetChargeLimit`, `SetPowerFeature`: App controls for charging limit and power assertions/force discharge.
+- `SetChargeLimit`, `SetPowerFeature`: App controls for charging limit and power assertions/force discharge/Low Power Mode.
 - `GetVersion`: Returns the daemon's `BuildID` used for offline pairing.
+
+Status fields (selection):
+- `time_to_full_minutes`, `time_to_empty_minutes` for estimates.
+- `magsafe_led_supported`, `magsafe_led_control_active`.
+- `low_power_mode_enabled` (parsed from `pmset -g`).
 
 ### MagSafe LED Control
 
