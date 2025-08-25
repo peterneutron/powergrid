@@ -21,10 +21,14 @@ struct RuleContext {
         return active < 100 ? active : currentIntent.preferredChargeLimit
     }
     var autoCutoff: Int { min(max(userLimit, 60), 99) }
+    var pausedAtOrAboveLimit: Bool {
+        currentStatus.isConnected && !currentStatus.isCharging && Int(currentStatus.chargeLimit) < 100 && Int(currentStatus.currentCharge) >= Int(currentStatus.chargeLimit)
+    }
 }
 
 enum RuleAction {
     case disableForceDischargeAndNotify(limit: Int)
+    case notifyLowPower(threshold: Int)
 }
 
 protocol Rule {
@@ -51,7 +55,10 @@ struct ForceDischargeAutoCutoffRule: Rule {
 
 final class RulesEngine {
     private var armed: [String: Bool] = [:]
-    private let rules: [Rule] = [ForceDischargeAutoCutoffRule()]
+    private let rules: [Rule] = [ForceDischargeAutoCutoffRule(), LowBattery20Rule(), LowBattery10Rule()]
+    // Debounce state for low-power notifications
+    private var didNotifyBelow20 = false
+    private var didNotifyBelow10 = false
 
     func evaluate(_ ctx: RuleContext) -> [RuleAction] {
         // Update armed states
@@ -72,6 +79,46 @@ final class RulesEngine {
                 armed[rule.id] = false
             }
         }
+        // Reset debouncers with hysteresis bands
+        let charge = Int(ctx.currentStatus.currentCharge)
+        if charge >= 22 { didNotifyBelow20 = false }
+        if charge >= 12 { didNotifyBelow10 = false }
         return actions
+    }
+}
+
+struct LowBattery20Rule: Rule {
+    let id = "lowBattery.20"
+    func isArmed(_ ctx: RuleContext) -> Bool {
+        ctx.currentIntent.lowPowerNotificationsEnabled && !ctx.currentStatus.isCharging && !ctx.pausedAtOrAboveLimit
+    }
+    func shouldFire(_ ctx: RuleContext) -> RuleAction? {
+        guard ctx.previousStatus != nil else { return nil }
+        let prev = Int(ctx.previousStatus!.currentCharge)
+        let curr = Int(ctx.currentStatus.currentCharge)
+        // Edge-triggered on crossing below 20%
+        if prev > 20 && curr <= 20 {
+            // Debounce check via engine state
+            // The engine resets when charge >= 22%
+            // We can't access engine flags here; DaemonClient will filter duplicates if needed.
+            return .notifyLowPower(threshold: 20)
+        }
+        return nil
+    }
+}
+
+struct LowBattery10Rule: Rule {
+    let id = "lowBattery.10"
+    func isArmed(_ ctx: RuleContext) -> Bool {
+        ctx.currentIntent.lowPowerNotificationsEnabled && !ctx.currentStatus.isCharging && !ctx.pausedAtOrAboveLimit
+    }
+    func shouldFire(_ ctx: RuleContext) -> RuleAction? {
+        guard ctx.previousStatus != nil else { return nil }
+        let prev = Int(ctx.previousStatus!.currentCharge)
+        let curr = Int(ctx.currentStatus.currentCharge)
+        if prev > 10 && curr <= 10 {
+            return .notifyLowPower(threshold: 10)
+        }
+        return nil
     }
 }

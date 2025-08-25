@@ -5,6 +5,9 @@ import (
     "net"
     "os"
     "os/signal"
+    "os/exec"
+    "bytes"
+    "strings"
     "sync"
     "syscall"
     "time"
@@ -88,6 +91,7 @@ func (s *powerGridServer) GetStatus(_ context.Context, _ *rpc.Empty) (*rpc.Statu
     }
     resp.MagsafeLedControlActive = s.wantMagsafeLED
     resp.MagsafeLedSupported = s.ledSupported
+    resp.LowPowerModeEnabled = getLowPowerModeEnabled()
     return resp, nil
 }
 
@@ -177,12 +181,42 @@ func (s *powerGridServer) SetPowerFeature(_ context.Context, req *rpc.SetPowerFe
                 s.lastLEDState = powerkit.LEDSystem
             }
         }
+    case rpc.PowerFeature_LOW_POWER_MODE:
+        // Toggle macOS Low Power Mode via pmset (root required; daemon runs as root)
+        target := "0"
+        if req.GetEnable() { target = "1" }
+        if err := exec.Command("/usr/bin/pmset", "-a", "lowpowermode", target).Run(); err != nil {
+            logger.Error("Failed to set lowpowermode=%s: %v", target, err)
+        } else {
+            logger.Default("Set lowpowermode=%s via pmset.", target)
+        }
     }
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.runChargingLogicLocked(nil)
 	return &rpc.Empty{}, nil
+}
+
+// getLowPowerModeEnabled returns true if pmset reports lowpowermode=1
+func getLowPowerModeEnabled() bool {
+    cmd := exec.Command("/usr/bin/pmset", "-g")
+    var out bytes.Buffer
+    cmd.Stdout = &out
+    if err := cmd.Run(); err != nil {
+        return false
+    }
+    for _, line := range strings.Split(out.String(), "\n") {
+        line = strings.TrimSpace(strings.ToLower(line))
+        if strings.HasPrefix(line, "lowpowermode") {
+            // line like: "lowpowermode         1"
+            if strings.Contains(line, " 1") || strings.HasSuffix(line, "1") {
+                return true
+            }
+            return false
+        }
+    }
+    return false
 }
 
 func (s *powerGridServer) runChargingLogic(info *powerkit.SystemInfo) {

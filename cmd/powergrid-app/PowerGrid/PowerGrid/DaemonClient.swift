@@ -27,6 +27,7 @@ struct UserIntent: Equatable {
     var controlMagsafeLED: Bool = false
     var forceDischargeMode: ForceDischargeMode = .off
     var menuBarDisplayStyle: MenuBarDisplayStyle = .iconAndText
+    var lowPowerNotificationsEnabled: Bool = true
 }
     
     @MainActor
@@ -40,6 +41,10 @@ struct UserIntent: Equatable {
                 if userIntent.menuBarDisplayStyle != oldValue.menuBarDisplayStyle {
                     UserDefaults.standard.set(userIntent.menuBarDisplayStyle.rawValue, forKey: "menuBarDisplayStyle")
                     log("Saved menu bar display style: \(userIntent.menuBarDisplayStyle.rawValue)")
+                }
+                if userIntent.lowPowerNotificationsEnabled != oldValue.lowPowerNotificationsEnabled {
+                    UserDefaults.standard.set(userIntent.lowPowerNotificationsEnabled, forKey: "lowPowerNotificationsEnabled")
+                    log("Saved low power notifications: \(userIntent.lowPowerNotificationsEnabled)")
                 }
             }
         }
@@ -69,6 +74,8 @@ struct UserIntent: Equatable {
         private var prevIntent: UserIntent?
         private let rules = RulesEngine()
         private var autoArmed = false // Auto is engaged (Auto selected AND FD active)
+        private var notifiedBelow20 = false
+        private var notifiedBelow10 = false
         @Published private(set) var embeddedDaemonBuildID: String?
         @Published private(set) var installedDaemonBuildID: String?
         private var skipUpgradeThisSession = false
@@ -83,6 +90,12 @@ struct UserIntent: Equatable {
                (60...99).contains(savedPref) {
                 self.userIntent.preferredChargeLimit = savedPref
                 log("Loaded preferred charge limit: \(savedPref)%")
+            }
+            if UserDefaults.standard.object(forKey: "lowPowerNotificationsEnabled") != nil {
+                self.userIntent.lowPowerNotificationsEnabled = UserDefaults.standard.bool(forKey: "lowPowerNotificationsEnabled")
+            } else {
+                self.userIntent.lowPowerNotificationsEnabled = true
+                UserDefaults.standard.set(true, forKey: "lowPowerNotificationsEnabled")
             }
             
             connect()
@@ -201,7 +214,8 @@ struct UserIntent: Equatable {
                     preventSystemSleep: response.preventSystemSleepActive,
                     controlMagsafeLED: response.magsafeLedControlActive,
                     forceDischargeMode: newFDMode,
-                    menuBarDisplayStyle: self.userIntent.menuBarDisplayStyle
+                    menuBarDisplayStyle: self.userIntent.menuBarDisplayStyle,
+                    lowPowerNotificationsEnabled: self.userIntent.lowPowerNotificationsEnabled
                 )
                 
                 if self.userIntent != intentFromServer {
@@ -226,9 +240,28 @@ struct UserIntent: Equatable {
                         await self.setPowerFeature(feature: .forceDischarge, enable: false)
                         await NotificationsService.shared.post(title: "Force Discharge Disabled",
                                                                body: "Reached limit (\(limit)%). Re-enabled adapter.")
+                    case .notifyLowPower(let threshold):
+                        let charge = Int(response.currentCharge)
+                        if threshold == 20 {
+                            if !self.notifiedBelow20 && charge <= 20 {
+                                self.notifiedBelow20 = true
+                                let includeAction = !(response.lowPowerModeEnabled)
+                                await NotificationsService.shared.postLowPowerAlert(threshold: 20, includeEnableAction: includeAction)
+                            }
+                        } else if threshold == 10 {
+                            if !self.notifiedBelow10 && charge <= 10 {
+                                self.notifiedBelow10 = true
+                                let includeAction = !(response.lowPowerModeEnabled)
+                                await NotificationsService.shared.postLowPowerAlert(threshold: 10, includeEnableAction: includeAction)
+                            }
+                        }
                     }
                 }
                 self.prevStatus = response
+                // Reset debouncers with hysteresis
+                let currentCharge = Int(response.currentCharge)
+                if currentCharge >= 22 { self.notifiedBelow20 = false }
+                if currentCharge >= 12 { self.notifiedBelow10 = false }
 
                 if connectionState != .connected {
                     connectionState = .connected

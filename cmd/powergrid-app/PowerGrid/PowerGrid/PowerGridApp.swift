@@ -12,6 +12,7 @@ import UserNotifications
 @main
 struct PowerGridApp: App {
     @StateObject private var client = DaemonClient()
+    private let notificationHandler = NotificationActionHandler()
     
     let timer = Timer.publish(every: 5, on: .main, in: .common).autoconnect()
 
@@ -29,6 +30,9 @@ struct PowerGridApp: App {
             MenuBarLabelView(client: client)
                 .task {
                     _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])
+                    NotificationsService.shared.registerLowPowerCategory()
+                    notificationHandler.client = client
+                    UNUserNotificationCenter.current().delegate = notificationHandler
                     client.connect()
                     await client.fetchStatus()
                 }
@@ -625,6 +629,8 @@ struct FooterActionsView: View {
                             Text("MagSafe LED control not supported on this hardware.")
                                 .font(.caption).foregroundStyle(.secondary)
                         }
+
+                        Toggle("Low Power Notifications", isOn: $client.userIntent.lowPowerNotificationsEnabled)
                     }
                     
                     //Toggle("Force Discharge", isOn: $client.userIntent.forceDischarge)
