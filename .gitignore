@@ -62,7 +62,10 @@ repomix-output.xml
 # Caches
 /.cache/
 
-build
-generated
-cmd/powergrid-app/PowerGrid/PowerGrid/internal/
+# Custom
+
+build/
+generated/
+cmd/powergrid-app/PowerGrid/PowerGrid/internal/rpc/powergrid.grpc.swift
+cmd/powergrid-app/PowerGrid/PowerGrid/internal/rpc/powergrid.pb.swift
 
