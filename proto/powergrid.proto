@@ -38,6 +38,14 @@ message StatusResponse {
   bool  magsafe_led_supported = 23;       // Hardware supports MagSafe LED control
   bool  low_power_mode_enabled = 24;      // macOS Low Power Mode is enabled
   bool  disable_charging_before_sleep_active = 25; // Whether daemon will disable charging before sleep
+  string battery_serial_number = 26;      // Battery serial number
+  int32  battery_design_capacity = 27;    // mAh
+  int32  battery_max_capacity = 28;       // mAh (current maximum)
+  int32  battery_nominal_capacity = 29;   // mAh (design nominal)
+  float  battery_voltage = 30;            // V
+  float  battery_amperage = 31;           // A
+  repeated int32 battery_individual_cell_millivolts = 32; // Per-cell voltage in mV
+  float  battery_temperature_c = 33;      // °C
 }
 
 message SetChargeLimitRequest {

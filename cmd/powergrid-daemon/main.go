@@ -90,11 +90,30 @@ func (s *powerGridServer) GetStatus(_ context.Context, _ *rpc.Empty) (*rpc.Statu
 		resp.SmcChargingEnabled = s.lastSMCStatus.State.IsChargingEnabled
 		resp.SmcAdapterEnabled = s.lastSMCStatus.State.IsAdapterEnabled
 	}
-	resp.MagsafeLedControlActive = s.wantMagsafeLED
-	resp.MagsafeLedSupported = s.ledSupported
-	resp.LowPowerModeEnabled = getLowPowerModeEnabled()
-	resp.DisableChargingBeforeSleepActive = s.wantDisableChargingBeforeSleep
-	return resp, nil
+    resp.MagsafeLedControlActive = s.wantMagsafeLED
+    resp.MagsafeLedSupported = s.ledSupported
+    resp.LowPowerModeEnabled = getLowPowerModeEnabled()
+    resp.DisableChargingBeforeSleepActive = s.wantDisableChargingBeforeSleep
+    // Battery details (best-effort; fields may not be available on all hardware)
+    if s.lastIOKitStatus != nil {
+        b := s.lastIOKitStatus.Battery
+        resp.BatterySerialNumber = b.SerialNumber
+        resp.BatteryDesignCapacity = int32(b.DesignCapacity)
+        resp.BatteryMaxCapacity = int32(b.MaxCapacity)
+        resp.BatteryNominalCapacity = int32(b.NominalCapacity)
+        resp.BatteryVoltage = float32(b.Voltage)
+        resp.BatteryAmperage = float32(b.Amperage)
+        // Temperature (°C) if available
+        resp.BatteryTemperatureC = float32(b.Temperature)
+        if len(b.IndividualCellVoltages) > 0 {
+            cells := make([]int32, len(b.IndividualCellVoltages))
+            for i, mv := range b.IndividualCellVoltages {
+                cells[i] = int32(mv)
+            }
+            resp.BatteryIndividualCellMillivolts = cells
+        }
+    }
+    return resp, nil
 }
 
 func (s *powerGridServer) GetVersion(_ context.Context, _ *rpc.Empty) (*rpc.VersionResponse, error) {

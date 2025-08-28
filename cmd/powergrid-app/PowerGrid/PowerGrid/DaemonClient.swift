@@ -29,6 +29,7 @@ struct UserIntent: Equatable {
     var forceDischargeMode: ForceDischargeMode = .off
     var menuBarDisplayStyle: MenuBarDisplayStyle = .iconAndText
     var lowPowerNotificationsEnabled: Bool = true
+    var showBatteryDetails: Bool = false
 }
     
     @MainActor
@@ -46,6 +47,10 @@ struct UserIntent: Equatable {
                 if userIntent.lowPowerNotificationsEnabled != oldValue.lowPowerNotificationsEnabled {
                     UserDefaults.standard.set(userIntent.lowPowerNotificationsEnabled, forKey: "lowPowerNotificationsEnabled")
                     log("Saved low power notifications: \(userIntent.lowPowerNotificationsEnabled)")
+                }
+                if userIntent.showBatteryDetails != oldValue.showBatteryDetails {
+                    UserDefaults.standard.set(userIntent.showBatteryDetails, forKey: AppSettings.showBatteryDetailsKey)
+                    log("Saved showBatteryDetails: \(userIntent.showBatteryDetails)")
                 }
             }
         }
@@ -91,6 +96,9 @@ struct UserIntent: Equatable {
                (60...99).contains(savedPref) {
                 self.userIntent.preferredChargeLimit = savedPref
                 log("Loaded preferred charge limit: \(savedPref)%")
+            }
+            if UserDefaults.standard.object(forKey: AppSettings.showBatteryDetailsKey) != nil {
+                self.userIntent.showBatteryDetails = UserDefaults.standard.bool(forKey: AppSettings.showBatteryDetailsKey)
             }
             if UserDefaults.standard.object(forKey: "lowPowerNotificationsEnabled") != nil {
                 self.userIntent.lowPowerNotificationsEnabled = UserDefaults.standard.bool(forKey: "lowPowerNotificationsEnabled")
@@ -217,7 +225,8 @@ struct UserIntent: Equatable {
                     disableChargingBeforeSleep: response.disableChargingBeforeSleepActive,
                     forceDischargeMode: newFDMode,
                     menuBarDisplayStyle: self.userIntent.menuBarDisplayStyle,
-                    lowPowerNotificationsEnabled: self.userIntent.lowPowerNotificationsEnabled
+                    lowPowerNotificationsEnabled: self.userIntent.lowPowerNotificationsEnabled,
+                    showBatteryDetails: self.userIntent.showBatteryDetails
                 )
                 
                 if self.userIntent != intentFromServer {
