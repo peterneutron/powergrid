@@ -630,6 +630,11 @@ struct FooterActionsView: View {
                                 .font(.caption).foregroundStyle(.secondary)
                         }
 
+                        Toggle("Disable Charging Before Sleep", isOn: $client.userIntent.disableChargingBeforeSleep)
+                            .onChange(of: client.userIntent.disableChargingBeforeSleep) { _, newValue in
+                                Task { await client.setPowerFeature(feature: .disableChargingBeforeSleep, enable: newValue) }
+                            }
+
                         Toggle("Low Power Notifications", isOn: $client.userIntent.lowPowerNotificationsEnabled)
                     }
                     

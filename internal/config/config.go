@@ -77,6 +77,8 @@ func EffectiveChargeLimit(userLimit, systemLimit, defaultLimit int) int {
 type jsonConfig struct {
     ChargeLimit      int  `json:"charge_limit"`
     ControlMagsafeLED bool `json:"control_magsafe_led,omitempty"`
+    // If nil (unset), default behavior is true (disable charging before sleep)
+    DisableChargingBeforeSleep *bool `json:"disable_charging_before_sleep,omitempty"`
 }
 
 func ensureDir(dir string) error {
@@ -206,5 +208,35 @@ func WriteUserMagsafeLEDStore(uid uint32, enabled bool) error {
         // keep a sane default if not set yet
         cfg.ChargeLimit = 80
     }
+    return writeJSON(path, cfg)
+}
+
+// Disable Charging Before Sleep preference (per-user)
+
+func ReadUserDisableChargingBeforeSleepStore(uid uint32) bool {
+    if uid == 0 {
+        return true // safe default
+    }
+    path := filepath.Join(UsersConfigDir, fmt.Sprintf("%d.json", uid))
+    if cfg, err := readJSON(path); err == nil {
+        if cfg.DisableChargingBeforeSleep == nil {
+            return true // default to enabled when not set
+        }
+        return *cfg.DisableChargingBeforeSleep
+    }
+    return true
+}
+
+func WriteUserDisableChargingBeforeSleepStore(uid uint32, enabled bool) error {
+    if uid == 0 {
+        return os.ErrInvalid
+    }
+    path := filepath.Join(UsersConfigDir, fmt.Sprintf("%d.json", uid))
+    cfg, _ := readJSON(path)
+    // ensure a sane limit if file was empty/new
+    if cfg.ChargeLimit == 0 {
+        cfg.ChargeLimit = 80
+    }
+    cfg.DisableChargingBeforeSleep = &enabled
     return writeJSON(path, cfg)
 }
