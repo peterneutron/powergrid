@@ -25,6 +25,7 @@ struct UserIntent: Equatable {
     var preventDisplaySleep: Bool = false
     var preventSystemSleep: Bool = false
     var controlMagsafeLED: Bool = false
+    var disableChargingBeforeSleep: Bool = true
     var forceDischargeMode: ForceDischargeMode = .off
     var menuBarDisplayStyle: MenuBarDisplayStyle = .iconAndText
     var lowPowerNotificationsEnabled: Bool = true
@@ -213,6 +214,7 @@ struct UserIntent: Equatable {
                     preventDisplaySleep: response.preventDisplaySleepActive,
                     preventSystemSleep: response.preventSystemSleepActive,
                     controlMagsafeLED: response.magsafeLedControlActive,
+                    disableChargingBeforeSleep: response.disableChargingBeforeSleepActive,
                     forceDischargeMode: newFDMode,
                     menuBarDisplayStyle: self.userIntent.menuBarDisplayStyle,
                     lowPowerNotificationsEnabled: self.userIntent.lowPowerNotificationsEnabled

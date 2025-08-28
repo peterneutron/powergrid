@@ -37,6 +37,7 @@ message StatusResponse {
   bool  magsafe_led_control_active = 22;  // Whether daemon is controlling MagSafe LED
   bool  magsafe_led_supported = 23;       // Hardware supports MagSafe LED control
   bool  low_power_mode_enabled = 24;      // macOS Low Power Mode is enabled
+  bool  disable_charging_before_sleep_active = 25; // Whether daemon will disable charging before sleep
 }
 
 message SetChargeLimitRequest {
@@ -50,6 +51,7 @@ enum PowerFeature {
   FORCE_DISCHARGE = 3;
   CONTROL_MAGSAFE_LED = 4;
   LOW_POWER_MODE = 5; // Toggle macOS Low Power Mode
+  DISABLE_CHARGING_BEFORE_SLEEP = 6; // Toggle disabling charging before sleep
 }
 
 message SetPowerFeatureRequest {
