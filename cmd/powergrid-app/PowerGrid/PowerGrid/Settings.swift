@@ -25,4 +25,5 @@ enum MenuBarDisplayStyle: String, CaseIterable, Codable {
 
 struct AppSettings {
     static let menuBarDisplayStyleKey = "menuBarDisplayStyle"
+    static let showBatteryDetailsKey = "showBatteryDetails"
 }

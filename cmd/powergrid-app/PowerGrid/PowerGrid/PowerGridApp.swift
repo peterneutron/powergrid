@@ -30,7 +30,7 @@ struct PowerGridApp: App {
             MenuBarLabelView(client: client)
                 .task {
                     _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])
-                    NotificationsService.shared.registerLowPowerCategory()
+                    await NotificationsService.shared.registerLowPowerCategory()
                     notificationHandler.client = client
                     UNUserNotificationCenter.current().delegate = notificationHandler
                     client.connect()
@@ -355,6 +355,11 @@ struct HeaderView: View {
 
                 PowerMetricsView(status: status)
             }
+            
+            if userIntent.showBatteryDetails {
+                Divider().padding(.vertical, 2)
+                BatteryDetailsView(status: status)
+            }
         }
         .font(.caption)
     }
@@ -371,6 +376,126 @@ struct HeaderView: View {
         if charge >= limit { return .green }
         return .primary
     }
+}
+
+struct BatteryDetailsView: View {
+    let status: Rpc_StatusResponse
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .top) {
+                // Left column
+                VStack(alignment: .leading, spacing: 4) {
+                    Grid(alignment: .leading, horizontalSpacing: 4) {
+                        GridRow {
+                            Text("Battery:")
+                            Text(status.batterySerialNumber.isEmpty ? "—" : status.batterySerialNumber)
+                                .gridColumnAlignment(.trailing)
+                            Text("")
+                        }
+                        Grid(alignment: .leading, horizontalSpacing: 6) {
+                            GridRow {
+                                Text("Voltage:")
+                                let v = status.batteryVoltage
+                                Text(v != 0 ? String(format: "%+.2f", v) : "—")
+                                    .monospacedDigit()
+                                    .foregroundColor(v >= 0 ? .green : .red)
+                                    .gridColumnAlignment(.trailing)
+                                Text("V").foregroundColor(.primary)
+                            }
+                            GridRow {
+                                Text("Current:")
+                                let a = status.batteryAmperage
+                                Text(a != 0 ? String(format: "%+.2f", a) : "—")
+                                    .monospacedDigit()
+                                    .foregroundColor(a >= 0 ? .green : .red)
+                                    .gridColumnAlignment(.trailing)
+                                Text("A").foregroundColor(.primary)
+                            }
+                            GridRow {
+                                Text("Temp:")
+                                let t = status.batteryTemperatureC
+                                Text(t != 0 ? String(format: "%.2f", t) : "—")
+                                    .monospacedDigit()
+                                    .gridColumnAlignment(.trailing)
+                                Text("C").foregroundColor(.primary)
+                            }
+                        }
+                    }
+                }
+
+                Spacer()
+
+                // Right column
+                VStack(alignment: .leading, spacing: 4) {
+                    Grid(alignment: .leading, horizontalSpacing: 4) {
+                        GridRow {
+                            Text("D-Cap:")
+                            Text(status.batteryDesignCapacity > 0 ? "\(status.batteryDesignCapacity)" : "—")
+                                .monospacedDigit()
+                                .gridColumnAlignment(.trailing)
+                            Text("mAh").foregroundColor(.primary)
+                        }
+                        GridRow {
+                            Text("M-Cap:")
+                            Text(status.batteryMaxCapacity > 0 ? "\(status.batteryMaxCapacity)" : "—")
+                                .monospacedDigit()
+                                .gridColumnAlignment(.trailing)
+                            Text("mAh").foregroundColor(.primary)
+                        }
+                        GridRow {
+                            Text("N-Cap:")
+                            Text(status.batteryNominalCapacity > 0 ? "\(status.batteryNominalCapacity)" : "—")
+                                .monospacedDigit()
+                                .gridColumnAlignment(.trailing)
+                            Text("mAh").foregroundColor(.primary)
+                        }
+                    }
+                }
+            }
+
+            // Below the two columns: individual cells (single line) and drift
+            Grid(alignment: .leading, horizontalSpacing: 4) {
+                GridRow {
+                    Text("Cells:")
+                    let cellLine = status.batteryIndividualCellMillivolts.map { mv in
+                        String(format: "%.3fV", Double(mv) / 1000.0)
+                    }.joined(separator: " | ")
+                    Text(cellLine.isEmpty ? "—" : cellLine)
+                        .monospacedDigit()
+                        .gridColumnAlignment(.leading)
+                    Text("")
+                }
+                GridRow {
+                    Text("Drift:")
+                    let (label, color) = driftLabelAndColor(millivolts: status.batteryIndividualCellMillivolts)
+                    let mvOpt = driftMilliVolts(millivolts: status.batteryIndividualCellMillivolts)
+                    Text(mvOpt == nil ? label : "\(label) (\(mvOpt!) mV)")
+                        .foregroundStyle(color)
+                        .gridColumnAlignment(.leading)
+                    Text("")
+                }
+            }
+            .padding(.top, 6)
+        }
+    }
+}
+
+private func driftLabelAndColor(millivolts: [Int32]) -> (String, Color) {
+    guard millivolts.count >= 2 else { return ("—", .secondary) }
+    let ints = millivolts.map { Int($0) }
+    guard let minV = ints.min(), let maxV = ints.max() else { return ("—", .secondary) }
+    let drift = maxV - minV // mV
+    if drift <= 10 { return ("Normal", .green) }
+    if drift <= 30 { return ("Slight", .yellow) }
+    return ("High", .red)
+}
+
+private func driftMilliVolts(millivolts: [Int32]) -> Int? {
+    guard millivolts.count >= 2 else { return nil }
+    let ints = millivolts.map { Int($0) }
+    guard let minV = ints.min(), let maxV = ints.max() else { return nil }
+    return maxV - minV
 }
 
 struct ControlsView: View {
@@ -636,6 +761,8 @@ struct FooterActionsView: View {
                             }
 
                         Toggle("Low Power Notifications", isOn: $client.userIntent.lowPowerNotificationsEnabled)
+
+                        Toggle("Show Battery Details", isOn: $client.userIntent.showBatteryDetails)
                     }
                     
                     //Toggle("Force Discharge", isOn: $client.userIntent.forceDischarge)
