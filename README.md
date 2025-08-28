@@ -28,6 +28,11 @@ PowerGrid is a macOS power management tool composed of:
 - Force Discharge Automatic: Discharges to your limit, then auto-disables; only selectable above limit.
 - Native Notifications: Alerts for key events (e.g., cutoff), single permission prompt.
 - Low Power Notifications: Alerts at 20% and 10% while discharging; includes an action button to enable macOS Low Power Mode when off.
+- Advanced Battery Details: When enabled in Advanced Options, shows additional battery information below the power metrics.
+  - Serial Number, Design/Maximum/Nominal Capacity (mAh)
+  - Battery Voltage (V), Battery Current (A), Temperature (°C)
+  - Individual Cell Voltages (V) and a Drift indicator: Normal (green), Slight (yellow), High (red)
+- Disable Charging Before Sleep: Configurable in Advanced Options and persisted per user by the daemon. When enabled, the daemon proactively disables charging on system sleep.
 - MagSafe LED Control: When enabled in Advanced Options (and supported by hardware), the daemon reflects charging modes on the MagSafe LED.
   - Charging (limit off or below limit): Amber
   - Fully charged or at/above user limit: Green

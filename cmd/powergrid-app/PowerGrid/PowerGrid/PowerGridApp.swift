@@ -459,7 +459,7 @@ struct BatteryDetailsView: View {
                 GridRow {
                     Text("Cells:")
                     let cellLine = status.batteryIndividualCellMillivolts.map { mv in
-                        String(format: "%.3fV", Double(mv) / 1000.0)
+                        String(format: "%.3f V", Double(mv) / 1000.0)
                     }.joined(separator: " | ")
                     Text(cellLine.isEmpty ? "—" : cellLine)
                         .monospacedDigit()
