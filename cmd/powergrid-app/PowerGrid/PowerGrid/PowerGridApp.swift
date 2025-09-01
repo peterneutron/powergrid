@@ -501,19 +501,20 @@ private func driftMilliVolts(millivolts: [Int32]) -> Int? {
 struct ControlsView: View {
     @ObservedObject var client: DaemonClient
     
-    private var chargeLimitLabelText: String {
+    private var chargeLimitValueText: String {
         if client.userIntent.chargeLimit >= 100 {
-            return "Limit: Off"
+            return "Off"
         } else {
-            return "Limit: \(client.userIntent.chargeLimit)%"
+            return "\(client.userIntent.chargeLimit)%"
         }
     }
     
     var body: some View {
         VStack(alignment: .leading) {
             HStack {
-                Text(chargeLimitLabelText)
+                Text("Limit")
                 Spacer()
+                Text(chargeLimitValueText)
             }
             Slider(value: chargeLimitBinding(), in: 60...100, step: 10) {
             } onEditingChanged: { isEditing in
