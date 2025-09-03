@@ -47,7 +47,7 @@ This project uses a `Makefile` to automate the build process.
 
 #### 1. Prerequisites
 
-- macOS with Xcode installed.
+- macOS with Xcode (26+ recommended) installed.
 - Go toolchain.
 - Homebrew for installing protobuf dependencies:
   ```bash
