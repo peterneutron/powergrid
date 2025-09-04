@@ -230,6 +230,7 @@ struct MainControlsView: View {
                 forceDischargeMode: client.userIntent.forceDischargeMode,
                 autoCutoff: autoCutoff,
                 userIntent: client.userIntent,
+                showBatteryDetails: $client.userIntent.showBatteryDetails,
                 debugUnlocked: $debugUnlocked
             )
             Divider()
@@ -248,6 +249,7 @@ struct HeaderView: View {
     let forceDischargeMode: ForceDischargeMode
     let autoCutoff: Int
     let userIntent: UserIntent
+    @Binding var showBatteryDetails: Bool
     @Binding var debugUnlocked: Bool
     
     private var computedStatusText: String {
@@ -365,7 +367,7 @@ struct HeaderView: View {
 
                 Spacer()
 
-                PowerMetricsView(status: status)
+                PowerMetricsView(status: status, showBatteryDetails: $showBatteryDetails)
             }
             
             if userIntent.showBatteryDetails {
@@ -558,6 +560,7 @@ extension ControlsView {
 
 struct PowerMetricsView: View {
     let status: Rpc_StatusResponse
+    @Binding var showBatteryDetails: Bool
 
     var body: some View {
         Grid(alignment: .leading, horizontalSpacing: 6) {
@@ -579,7 +582,10 @@ struct PowerMetricsView: View {
             }
 
             GridRow {
-                Text("Battery:")
+                Button(action: { showBatteryDetails.toggle() }) {
+                    Text("Battery:")
+                }
+                .buttonStyle(.plain)
                 Text(formatWattage(status.batteryWattage, showSign: true))
                     .monospacedDigit()
                     .foregroundColor(status.batteryWattage >= 0 ? .green : .red)
