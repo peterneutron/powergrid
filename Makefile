@@ -34,4 +34,4 @@ clean:
 	@echo "✅ Cleaned build, generated, and rpc directories."
 
 # Declare targets that are not files
-.PHONY: all build_app archive proto clean
+.PHONY: all proto clean

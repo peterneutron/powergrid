@@ -730,11 +730,6 @@ struct FooterActionsView: View {
 
             HStack {
                 Menu("Advanced Options") {
-                    //Toggle("Prevent Display Sleep", isOn: $client.userIntent.preventDisplaySleep)
-                    //    .onChange(of: client.userIntent.preventDisplaySleep) { _, newValue in
-                    //        Task { await client.setPowerFeature(feature: .preventDisplaySleep, enable: newValue) }
-                    //    }
-                    
                     VStack(alignment: .leading) {
                         Toggle("Prevent System Sleep", isOn: $client.userIntent.preventSystemSleep)
                             .disabled(client.userIntent.preventDisplaySleep)
@@ -765,11 +760,6 @@ struct FooterActionsView: View {
 
                         Toggle("Show Battery Details", isOn: $client.userIntent.showBatteryDetails)
                     }
-                    
-                    //Toggle("Force Discharge", isOn: $client.userIntent.forceDischarge)
-                    //    .onChange(of: client.userIntent.forceDischarge) { _, newValue in
-                    //        Task { await client.setPowerFeature(feature: .forceDischarge, enable: newValue) }
-                    //    }
                     
                     Button("View Daemon Logs in Console") {
                         guard let consoleURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.Console") else { return }

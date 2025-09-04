@@ -80,8 +80,6 @@ struct UserIntent: Equatable {
         private var prevIntent: UserIntent?
         private let rules = RulesEngine()
         private var autoArmed = false // Auto is engaged (Auto selected AND FD active)
-        private var notifiedBelow20 = false
-        private var notifiedBelow10 = false
         @Published private(set) var embeddedDaemonBuildID: String?
         @Published private(set) var installedDaemonBuildID: String?
         private var skipUpgradeThisSession = false
@@ -252,27 +250,11 @@ struct UserIntent: Equatable {
                         await NotificationsService.shared.post(title: "Force Discharge Disabled",
                                                                body: "Reached limit (\(limit)%). Re-enabled adapter.")
                     case .notifyLowPower(let threshold):
-                        let charge = Int(response.currentCharge)
-                        if threshold == 20 {
-                            if !self.notifiedBelow20 && charge <= 20 {
-                                self.notifiedBelow20 = true
-                                let includeAction = !(response.lowPowerModeEnabled)
-                                await NotificationsService.shared.postLowPowerAlert(threshold: 20, includeEnableAction: includeAction)
-                            }
-                        } else if threshold == 10 {
-                            if !self.notifiedBelow10 && charge <= 10 {
-                                self.notifiedBelow10 = true
-                                let includeAction = !(response.lowPowerModeEnabled)
-                                await NotificationsService.shared.postLowPowerAlert(threshold: 10, includeEnableAction: includeAction)
-                            }
-                        }
+                        let includeAction = !(response.lowPowerModeEnabled)
+                        await NotificationsService.shared.postLowPowerAlert(threshold: threshold, includeEnableAction: includeAction)
                     }
                 }
                 self.prevStatus = response
-                // Reset debouncers with hysteresis
-                let currentCharge = Int(response.currentCharge)
-                if currentCharge >= 22 { self.notifiedBelow20 = false }
-                if currentCharge >= 12 { self.notifiedBelow10 = false }
 
                 if connectionState != .connected {
                     connectionState = .connected

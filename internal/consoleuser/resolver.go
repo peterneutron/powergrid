@@ -1,9 +1,10 @@
 package consoleuser
 
 import (
-	"os"
-	"os/user"
-	"syscall"
+    "os"
+    "os/user"
+    "strconv"
+    "syscall"
 )
 
 type ConsoleUser struct {
@@ -24,32 +25,11 @@ func Current() (*ConsoleUser, error) {
 	if st.Uid == 0 {
 		return nil, nil
 	}
-	u, err := user.LookupId(intToString(int(st.Uid)))
+    u, err := user.LookupId(strconv.Itoa(int(st.Uid)))
 	if err != nil {
 		return &ConsoleUser{UID: st.Uid}, nil
 	}
 	return &ConsoleUser{Username: u.Username, UID: st.Uid, HomeDir: u.HomeDir}, nil
 }
 
-func intToString(i int) string {
-	if i == 0 {
-		return "0"
-	}
-	neg := false
-	if i < 0 {
-		neg = true
-		i = -i
-	}
-	var b [20]byte
-	bp := len(b)
-	for i > 0 {
-		bp--
-		b[bp] = byte('0' + i%10)
-		i /= 10
-	}
-	if neg {
-		bp--
-		b[bp] = '-'
-	}
-	return string(b[bp:])
-}
+// intToString removed in favor of strconv.Itoa for clarity and correctness

@@ -1,25 +1,25 @@
 package main
 
 import (
-	"bytes"
-	"context"
-	"net"
-	"os"
-	"os/exec"
-	"os/signal"
-	"strings"
-	"sync"
-	"syscall"
-	"time"
+    "bytes"
+    "context"
+    "net"
+    "os"
+    "os/exec"
+    "os/signal"
+    "strings"
+    "sync"
+    "syscall"
+    "time"
 
-	"google.golang.org/grpc"
+    "google.golang.org/grpc"
 
-	"github.com/peterneutron/powerkit-go/pkg/powerkit"
+    "github.com/peterneutron/powerkit-go/pkg/powerkit"
 
-	rpc "powergrid/generated/go"
-	cfg "powergrid/internal/config"
-	consoleuser "powergrid/internal/consoleuser"
-	oslogger "powergrid/internal/oslogger"
+    rpc "powergrid/generated/go"
+    cfg "powergrid/internal/config"
+    consoleuser "powergrid/internal/consoleuser"
+    oslogger "powergrid/internal/oslogger"
 )
 
 const (
@@ -50,6 +50,13 @@ type powerGridServer struct {
 	wantDisableChargingBeforeSleep bool
 	ledSupported                   bool
 	lastLEDState                   powerkit.MagsafeLEDState
+}
+
+// Low Power Mode check cache to reduce pmset invocations under polling
+var lpmCache struct {
+    mu    sync.Mutex
+    t     time.Time
+    value bool
 }
 
 func (s *powerGridServer) GetStatus(_ context.Context, _ *rpc.Empty) (*rpc.StatusResponse, error) {
@@ -231,23 +238,37 @@ func (s *powerGridServer) SetPowerFeature(_ context.Context, req *rpc.SetPowerFe
 
 // getLowPowerModeEnabled returns true if pmset reports lowpowermode=1
 func getLowPowerModeEnabled() bool {
-	cmd := exec.Command("/usr/bin/pmset", "-g")
-	var out bytes.Buffer
-	cmd.Stdout = &out
-	if err := cmd.Run(); err != nil {
-		return false
-	}
-	for _, line := range strings.Split(out.String(), "\n") {
-		line = strings.TrimSpace(strings.ToLower(line))
-		if strings.HasPrefix(line, "lowpowermode") {
-			// line like: "lowpowermode         1"
-			if strings.Contains(line, " 1") || strings.HasSuffix(line, "1") {
-				return true
-			}
-			return false
-		}
-	}
-	return false
+    // Cache for 2 seconds to avoid frequent process spawn under UI polling
+    lpmCache.mu.Lock()
+    if time.Since(lpmCache.t) < 2*time.Second {
+        v := lpmCache.value
+        lpmCache.mu.Unlock()
+        return v
+    }
+    lpmCache.mu.Unlock()
+
+    cmd := exec.Command("/usr/bin/pmset", "-g")
+    var out bytes.Buffer
+    cmd.Stdout = &out
+    if err := cmd.Run(); err != nil {
+        // On error, do not update cache time to allow quick retry next tick
+        return false
+    }
+    enabled := false
+    for _, line := range strings.Split(out.String(), "\n") {
+        line = strings.TrimSpace(strings.ToLower(line))
+        if strings.HasPrefix(line, "lowpowermode") {
+            if strings.Contains(line, " 1") || strings.HasSuffix(line, "1") {
+                enabled = true
+            }
+            break
+        }
+    }
+    lpmCache.mu.Lock()
+    lpmCache.t = time.Now()
+    lpmCache.value = enabled
+    lpmCache.mu.Unlock()
+    return enabled
 }
 
 func (s *powerGridServer) runChargingLogic(info *powerkit.SystemInfo) {
@@ -321,32 +342,36 @@ func (s *powerGridServer) startEventStream() {
 		case powerkit.EventTypeSystemWillSleep:
 			s.handleSleep()
 
-		case powerkit.EventTypeSystemDidWake:
-			logger.Default("System woke up. Re-evaluating state in 3 seconds...")
+        case powerkit.EventTypeSystemDidWake:
+            logger.Default("System woke up. Re-evaluating state with backoff...")
 
-			go func() {
-				time.Sleep(3 * time.Second)
+            go func() {
+                // Retry a few times with backoff to allow subsystems to stabilize
+                delays := []time.Duration{1 * time.Second, 2 * time.Second, 4 * time.Second}
+                for i, d := range delays {
+                    time.Sleep(d)
 
-				s.mu.RLock()
-				shouldPreventDisplaySleep := s.wantPreventDisplaySleep
-				shouldPreventSystemSleep := s.wantPreventSystemSleep
-				s.mu.RUnlock()
+                    s.mu.RLock()
+                    shouldPreventDisplaySleep := s.wantPreventDisplaySleep
+                    shouldPreventSystemSleep := s.wantPreventSystemSleep
+                    s.mu.RUnlock()
 
-				if shouldPreventDisplaySleep {
-					logger.Default("Re-applying 'Prevent Display Sleep' assertion after wake.")
-					if _, err := powerkit.CreateAssertion(powerkit.AssertionTypePreventDisplaySleep, "PowerGrid: Prevent Display Sleep"); err != nil {
-						logger.Error("Failed to re-create display sleep assertion after wake: %v", err)
-					}
-				}
-				if shouldPreventSystemSleep {
-					logger.Default("Re-applying 'Prevent System Sleep' assertion after wake.")
-					if _, err := powerkit.CreateAssertion(powerkit.AssertionTypePreventSystemSleep, "PowerGrid: Prevent System Sleep"); err != nil {
-						logger.Error("Failed to re-create system sleep assertion after wake: %v", err)
-					}
-				}
+                    if shouldPreventDisplaySleep {
+                        logger.Default("Re-applying 'Prevent Display Sleep' after wake (attempt %d).", i+1)
+                        if _, err := powerkit.CreateAssertion(powerkit.AssertionTypePreventDisplaySleep, "PowerGrid: Prevent Display Sleep"); err != nil {
+                            logger.Error("Failed to re-create display sleep assertion after wake: %v", err)
+                        }
+                    }
+                    if shouldPreventSystemSleep {
+                        logger.Default("Re-applying 'Prevent System Sleep' after wake (attempt %d).", i+1)
+                        if _, err := powerkit.CreateAssertion(powerkit.AssertionTypePreventSystemSleep, "PowerGrid: Prevent System Sleep"); err != nil {
+                            logger.Error("Failed to re-create system sleep assertion after wake: %v", err)
+                        }
+                    }
 
-				s.runChargingLogic(nil)
-			}()
+                    s.runChargingLogic(nil)
+                }
+            }()
 
 		case powerkit.EventTypeBatteryUpdate:
 			logger.Info("Received a battery status update, running charging logic.")
@@ -379,15 +404,7 @@ func (s *powerGridServer) startConsoleUserEventHandler() {
 	}()
 }
 
-func (s *powerGridServer) startConsoleUserWatcher() {
-	ticker := time.NewTicker(5 * time.Second)
-	s.handleConsoleUserChange(nil)
-	go func() {
-		for range ticker.C {
-			s.handleConsoleUserChange(&struct{}{})
-		}
-	}()
-}
+// startConsoleUserWatcher removed (unused). Event-based handler is used instead.
 
 func (s *powerGridServer) handleConsoleUserChange(_ interface{}) {
 	userNow, err := consoleuser.Current()
