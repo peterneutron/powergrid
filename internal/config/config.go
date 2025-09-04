@@ -2,8 +2,6 @@ package config
 
 import (
     "bytes"
-    "encoding/json"
-    "fmt"
     "os"
     "os/exec"
     "path/filepath"
@@ -12,12 +10,11 @@ import (
 )
 
 const (
-	SystemPlistPath  = "/Library/Preferences/com.neutronstar.powergrid.daemon.plist"
-	UserDomain       = "com.neutronstar.powergrid"
-	KeyChargeLimit   = "ChargeLimit"
-	DaemonConfigDir  = "/Library/Application Support/com.neutronstar.powergrid"
-	UsersConfigDir   = DaemonConfigDir + "/users"
-	SystemConfigPath = DaemonConfigDir + "/system.json"
+    SystemPlistPath = "/Library/Preferences/com.neutronstar.powergrid.daemon.plist"
+    UserDomain      = "com.neutronstar.powergrid"
+    KeyChargeLimit  = "ChargeLimit"
+    KeyMagsafeLED   = "ControlMagsafeLED"
+    KeyDisableCBS   = "DisableChargingBeforeSleep"
 )
 
 func clampLimit(v int) int {
@@ -65,93 +62,13 @@ func ReadUserChargeLimit(homeDir string) int {
 }
 
 func EffectiveChargeLimit(userLimit, systemLimit, defaultLimit int) int {
-	if userLimit > 0 {
-		return clampLimit(userLimit)
-	}
-	if systemLimit > 0 {
-		return clampLimit(systemLimit)
-	}
-	return clampLimit(defaultLimit)
-}
-
-type jsonConfig struct {
-    ChargeLimit      int  `json:"charge_limit"`
-    ControlMagsafeLED bool `json:"control_magsafe_led,omitempty"`
-    // If nil (unset), default behavior is true (disable charging before sleep)
-    DisableChargingBeforeSleep *bool `json:"disable_charging_before_sleep,omitempty"`
-}
-
-func ensureDir(dir string) error {
-	return os.MkdirAll(dir, 0755)
-}
-
-func readJSON(path string) (jsonConfig, error) {
-    b, err := os.ReadFile(path)
-    if err != nil {
-        return jsonConfig{}, err
+    if userLimit > 0 {
+        return clampLimit(userLimit)
     }
-    var cfg jsonConfig
-    if err := json.Unmarshal(b, &cfg); err != nil {
-        return jsonConfig{}, err
+    if systemLimit > 0 {
+        return clampLimit(systemLimit)
     }
-    cfg.ChargeLimit = clampLimit(cfg.ChargeLimit)
-    return cfg, nil
-}
-
-func writeJSON(path string, cfg jsonConfig) error {
-    if err := ensureDir(filepath.Dir(path)); err != nil {
-        return err
-    }
-    tmp := path + ".tmp"
-    cfg.ChargeLimit = clampLimit(cfg.ChargeLimit)
-    b, err := json.MarshalIndent(cfg, "", "  ")
-    if err != nil {
-        return err
-    }
-    if err := os.WriteFile(tmp, b, 0644); err != nil {
-        return err
-	}
-	if err := os.Rename(tmp, path); err != nil {
-		_ = os.Remove(tmp)
-		return err
-	}
-	return nil
-}
-
-func EnsureSystemConfig(defaultLimit int) error {
-    if fi, err := os.Stat(SystemConfigPath); err == nil && !fi.IsDir() {
-        return nil
-    }
-    return writeJSON(SystemConfigPath, jsonConfig{ChargeLimit: defaultLimit})
-}
-
-func ReadSystemChargeLimitStore() int {
-    if cfg, err := readJSON(SystemConfigPath); err == nil {
-        return cfg.ChargeLimit
-    }
-    return 0
-}
-
-func ReadUserChargeLimitStore(uid uint32) int {
-    if uid == 0 {
-        return 0
-    }
-    path := filepath.Join(UsersConfigDir, fmt.Sprintf("%d.json", uid))
-    if cfg, err := readJSON(path); err == nil {
-        return cfg.ChargeLimit
-    }
-    return 0
-}
-
-func WriteUserChargeLimitStore(uid uint32, limit int) error {
-    if uid == 0 {
-        return os.ErrInvalid
-    }
-    path := filepath.Join(UsersConfigDir, fmt.Sprintf("%d.json", uid))
-    // Preserve other fields if present
-    cfg, _ := readJSON(path)
-    cfg.ChargeLimit = limit
-    return writeJSON(path, cfg)
+    return clampLimit(defaultLimit)
 }
 
 func runDefaultsRead(domainOrPath, key string, env []string) (string, error) {
@@ -170,64 +87,104 @@ func runDefaultsRead(domainOrPath, key string, env []string) (string, error) {
 }
 
 func WriteUserChargeLimit(homeDir string, uid uint32, limit int) error {
-    return WriteUserChargeLimitStore(uid, limit)
+    if homeDir == "" {
+        return os.ErrInvalid
+    }
+    env := append(os.Environ(), "HOME="+homeDir, "USER=")
+    return runDefaultsWrite(UserDomain, KeyChargeLimit, limit, env)
 }
 
-// runDefaultsWrite removed; JSON-based store is used for persistence.
+func runDefaultsWrite(domainOrPath, key string, intValue int, env []string) error {
+    cmd := exec.Command("/usr/bin/defaults", "write", domainOrPath, key, "-int", strconv.Itoa(intValue))
+    if env != nil {
+        cmd.Env = env
+    }
+    var stdout, stderr bytes.Buffer
+    cmd.Stdout = &stdout
+    cmd.Stderr = &stderr
+    return cmd.Run()
+}
 
 // MagSafe LED preference (per-user)
 
-func ReadUserMagsafeLEDStore(uid uint32) bool {
-    if uid == 0 {
+func ReadUserMagsafeLED(homeDir string) bool {
+    if homeDir == "" {
         return false
     }
-    path := filepath.Join(UsersConfigDir, fmt.Sprintf("%d.json", uid))
-    if cfg, err := readJSON(path); err == nil {
-        return cfg.ControlMagsafeLED
+    env := append(os.Environ(), "HOME="+homeDir, "USER=")
+    out, err := runDefaultsRead(UserDomain, KeyMagsafeLED, env)
+    if err != nil {
+        // try direct plist path fallback
+        plistPath := filepath.Join(homeDir, "Library", "Preferences", UserDomain+".plist")
+        out, err = runDefaultsRead(plistPath, KeyMagsafeLED, env)
+        if err != nil {
+            return false
+        }
     }
-    return false
+    s := strings.TrimSpace(out)
+    return s == "1" || strings.EqualFold(s, "true")
 }
 
-func WriteUserMagsafeLEDStore(uid uint32, enabled bool) error {
-    if uid == 0 {
+func WriteUserMagsafeLED(homeDir string, enabled bool) error {
+    if homeDir == "" {
         return os.ErrInvalid
     }
-    path := filepath.Join(UsersConfigDir, fmt.Sprintf("%d.json", uid))
-    cfg, _ := readJSON(path)
-    cfg.ControlMagsafeLED = enabled
-    if cfg.ChargeLimit == 0 {
-        // keep a sane default if not set yet
-        cfg.ChargeLimit = 80
+    env := append(os.Environ(), "HOME="+homeDir, "USER=")
+    val := "-bool"
+    boolStr := "false"
+    if enabled {
+        boolStr = "true"
     }
-    return writeJSON(path, cfg)
+    cmd := exec.Command("/usr/bin/defaults", "write", UserDomain, KeyMagsafeLED, val, boolStr)
+    cmd.Env = env
+    var stdout, stderr bytes.Buffer
+    cmd.Stdout = &stdout
+    cmd.Stderr = &stderr
+    return cmd.Run()
 }
 
 // Disable Charging Before Sleep preference (per-user)
 
-func ReadUserDisableChargingBeforeSleepStore(uid uint32) bool {
-    if uid == 0 {
-        return true // safe default
+func ReadUserDisableChargingBeforeSleep(homeDir string) bool {
+    if homeDir == "" {
+        return true
     }
-    path := filepath.Join(UsersConfigDir, fmt.Sprintf("%d.json", uid))
-    if cfg, err := readJSON(path); err == nil {
-        if cfg.DisableChargingBeforeSleep == nil {
-            return true // default to enabled when not set
-        }
-        return *cfg.DisableChargingBeforeSleep
+    env := append(os.Environ(), "HOME="+homeDir, "USER=")
+    out, err := runDefaultsRead(UserDomain, KeyDisableCBS, env)
+    if err != nil {
+        // default to true when not set
+        return true
     }
-    return true
+    s := strings.TrimSpace(out)
+    if s == "" {
+        return true
+    }
+    return s == "1" || strings.EqualFold(s, "true")
 }
 
-func WriteUserDisableChargingBeforeSleepStore(uid uint32, enabled bool) error {
-    if uid == 0 {
+func WriteUserDisableChargingBeforeSleep(homeDir string, enabled bool) error {
+    if homeDir == "" {
         return os.ErrInvalid
     }
-    path := filepath.Join(UsersConfigDir, fmt.Sprintf("%d.json", uid))
-    cfg, _ := readJSON(path)
-    // ensure a sane limit if file was empty/new
-    if cfg.ChargeLimit == 0 {
-        cfg.ChargeLimit = 80
+    env := append(os.Environ(), "HOME="+homeDir, "USER=")
+    val := "-bool"
+    boolStr := "false"
+    if enabled {
+        boolStr = "true"
     }
-    cfg.DisableChargingBeforeSleep = &enabled
-    return writeJSON(path, cfg)
+    cmd := exec.Command("/usr/bin/defaults", "write", UserDomain, KeyDisableCBS, val, boolStr)
+    cmd.Env = env
+    var stdout, stderr bytes.Buffer
+    cmd.Stdout = &stdout
+    cmd.Stderr = &stderr
+    return cmd.Run()
+}
+
+// EnsureSystemConfig makes sure a system-level ChargeLimit exists; if not, writes default.
+func EnsureSystemConfig(defaultLimit int) error {
+    if ReadSystemChargeLimit() == 0 {
+        // write to system plist path using defaults
+        return runDefaultsWrite(SystemPlistPath, KeyChargeLimit, defaultLimit, nil)
+    }
+    return nil
 }
