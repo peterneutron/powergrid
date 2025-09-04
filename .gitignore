@@ -59,6 +59,7 @@ xcuserdata/
 *.trace
 repomix-output.xml
 temporary.md
+AGENTS.md
 
 # Caches
 /.cache/
@@ -69,5 +70,4 @@ build/
 generated/
 cmd/powergrid-app/PowerGrid/PowerGrid/internal/rpc/powergrid.grpc.swift
 cmd/powergrid-app/PowerGrid/PowerGrid/internal/rpc/powergrid.pb.swift
-
 cmd/powergrid-app/PowerGrid/PowerGrid.xcodeproj/project.pbxproj

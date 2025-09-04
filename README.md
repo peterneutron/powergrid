@@ -99,9 +99,22 @@ The `Makefile` provides several targets to streamline development:
 
 ## Configuration
 
-The daemon stores its configuration under `/Library/Application Support/com.neutronstar.powergrid/`. It uses a user > system > default hierarchy to determine the effective charge limit.
-- `system.json`: System-wide default charge limit.
-- `users/<uid>.json`: Per-user overrides.
+PowerGrid uses standard macOS preferences (CFPreferences / `defaults`) and a simple precedence: user > system > built‑in default.
+
+- System (daemon): `/Library/Preferences/com.neutronstar.powergrid.daemon.plist`
+  - `ChargeLimit` (int, 60–100): System charge limit used when no user is active or user has no override.
+
+- Per‑user (daemon/app): `~/Library/Preferences/com.neutronstar.powergrid.plist`
+  - `ChargeLimit` (int, 60–100): User override for effective charge limit.
+  - `ControlMagsafeLED` (bool): When true (and supported), daemon controls MagSafe LED state.
+  - `DisableChargingBeforeSleep` (bool, default true): When true, daemon proactively disables charging on system sleep.
+
+- App UI (UserDefaults in the app domain):
+  - `menuBarDisplayStyle`, `preferredChargeLimit`, `lowPowerNotificationsEnabled`, `showBatteryDetails`.
+  - These are UI-only and do not affect the daemon directly (except via RPC calls when you change settings in the app).
+
+Notes:
+- Low Power Mode (macOS) is not persisted by PowerGrid; the daemon reads the current state via `pmset -g` and toggles it via `pmset -a` when requested.
 
 ## Logging
 
