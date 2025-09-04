@@ -129,6 +129,7 @@ private struct StatusIconLabel: View {
 
 struct AppMenuView: View {
     @ObservedObject var client: DaemonClient
+    @State private var debugUnlocked: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -147,7 +148,7 @@ struct AppMenuView: View {
                 
             case .installed:
                 if client.connectionState == .connected, let status = client.status {
-                    MainControlsView(client: client, status: status)
+                    MainControlsView(client: client, status: status, debugUnlocked: $debugUnlocked)
                 } else {
                     VStack {
                         Text("PowerGrid Daemon Not Responding")
@@ -215,6 +216,7 @@ struct InstallationView: View {
 struct MainControlsView: View {
     @ObservedObject var client: DaemonClient
     let status: Rpc_StatusResponse
+    @Binding var debugUnlocked: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -227,14 +229,15 @@ struct MainControlsView: View {
                 displayStyle: client.userIntent.menuBarDisplayStyle,
                 forceDischargeMode: client.userIntent.forceDischargeMode,
                 autoCutoff: autoCutoff,
-                userIntent: client.userIntent
+                userIntent: client.userIntent,
+                debugUnlocked: $debugUnlocked
             )
             Divider()
             ControlsView(client: client)
             Divider()
             
             QuickActionsView(client: client, status: status)
-            FooterActionsView(client: client)
+            FooterActionsView(client: client, debugUnlocked: debugUnlocked)
         }
     }
 }
@@ -245,6 +248,7 @@ struct HeaderView: View {
     let forceDischargeMode: ForceDischargeMode
     let autoCutoff: Int
     let userIntent: UserIntent
+    @Binding var debugUnlocked: Bool
     
     private var computedStatusText: String {
         let adapterPresent = Int(status.adapterMaxWatts) > 0
@@ -272,7 +276,15 @@ struct HeaderView: View {
     
     var body: some View {
         HStack(alignment: .firstTextBaseline) {
-            Text("PowerGrid").font(.title).bold()
+            HStack(spacing: 0) {
+                Text("P")
+                Button(action: { debugUnlocked.toggle() }) {
+                    Text("o")
+                }
+                .buttonStyle(.plain)
+                Text("werGrid")
+            }
+            .font(.title).bold()
             Spacer()
             HStack(spacing: 4) {
                 Text("")
@@ -722,6 +734,7 @@ struct QuickActionsView: View {
 
 struct FooterActionsView: View {
     @ObservedObject var client: DaemonClient
+    let debugUnlocked: Bool
     
     var body: some View {
         VStack(spacing: 0) {
@@ -768,8 +781,8 @@ struct FooterActionsView: View {
                     }
                     
                     Divider()
-                    // Developer submenu (only when running a dirty build)
-                    if client.embeddedDaemonBuildID?.hasSuffix("-dirty") == true {
+                    // Developer submenu (dirty builds or when unlocked via hidden toggle)
+                    if debugUnlocked || (client.embeddedDaemonBuildID?.hasSuffix("-dirty") == true) {
                         Menu("Developer") {
                             Text("Daemon IDs").font(.caption).foregroundStyle(.secondary)
                             if let embedded = client.embeddedDaemonBuildID {
