@@ -58,6 +58,7 @@ xcuserdata/
 *.crash
 *.trace
 repomix-output.xml
+temporary.md
 
 # Caches
 /.cache/
