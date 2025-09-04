@@ -1,14 +1,14 @@
 package config
 
 import (
-	"bytes"
-	"encoding/json"
-	"fmt"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"strconv"
-	"strings"
+    "bytes"
+    "encoding/json"
+    "fmt"
+    "os"
+    "os/exec"
+    "path/filepath"
+    "strconv"
+    "strings"
 )
 
 const (
@@ -173,16 +173,7 @@ func WriteUserChargeLimit(homeDir string, uid uint32, limit int) error {
     return WriteUserChargeLimitStore(uid, limit)
 }
 
-func runDefaultsWrite(domainOrPath, key string, intValue int, env []string) error {
-	cmd := exec.Command("/usr/bin/defaults", "write", domainOrPath, key, "-int", strconv.Itoa(intValue))
-	if env != nil {
-		cmd.Env = env
-	}
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	return cmd.Run()
-}
+// runDefaultsWrite removed; JSON-based store is used for persistence.
 
 // MagSafe LED preference (per-user)
 
