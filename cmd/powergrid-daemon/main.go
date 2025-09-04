@@ -197,7 +197,7 @@ func (s *powerGridServer) SetPowerFeature(_ context.Context, req *rpc.SetPowerFe
 		} else {
 			s.wantMagsafeLED = enable
 			if s.currentConsoleUser != nil {
-				_ = cfg.WriteUserMagsafeLEDStore(s.currentConsoleUser.UID, enable)
+				_ = cfg.WriteUserMagsafeLED(s.currentConsoleUser.HomeDir, enable)
 			}
 		}
 		s.mu.Unlock()
@@ -214,7 +214,7 @@ func (s *powerGridServer) SetPowerFeature(_ context.Context, req *rpc.SetPowerFe
 		enable := req.GetEnable()
 		s.wantDisableChargingBeforeSleep = enable
 		if s.currentConsoleUser != nil {
-			_ = cfg.WriteUserDisableChargingBeforeSleepStore(s.currentConsoleUser.UID, enable)
+			_ = cfg.WriteUserDisableChargingBeforeSleep(s.currentConsoleUser.HomeDir, enable)
 		}
 		s.mu.Unlock()
 	case rpc.PowerFeature_LOW_POWER_MODE:
@@ -452,10 +452,7 @@ func (s *powerGridServer) enterNoUser() {
 		}
 	}
 
-	systemLimit := cfg.ReadSystemChargeLimitStore()
-	if systemLimit == 0 {
-		systemLimit = cfg.ReadSystemChargeLimit()
-	}
+systemLimit := cfg.ReadSystemChargeLimit()
 	effective := cfg.EffectiveChargeLimit(0, systemLimit, defaultChargeLimit)
 	s.mu.Lock()
 	s.currentLimit = int32(effective)
@@ -470,8 +467,8 @@ func (s *powerGridServer) enterConsoleUser(u *consoleuser.ConsoleUser) {
 	s.currentConsoleUser = u
 	s.wantPreventDisplaySleep = false
 	s.wantPreventSystemSleep = false
-	s.wantMagsafeLED = cfg.ReadUserMagsafeLEDStore(u.UID)
-	s.wantDisableChargingBeforeSleep = cfg.ReadUserDisableChargingBeforeSleepStore(u.UID)
+    s.wantMagsafeLED = cfg.ReadUserMagsafeLED(u.HomeDir)
+    s.wantDisableChargingBeforeSleep = cfg.ReadUserDisableChargingBeforeSleep(u.HomeDir)
 	s.mu.Unlock()
 
 	logger.Default("Entering ConsoleUser state (%s): clearing assertions, enabling adapter, applying effective limit", u.Username)
@@ -480,14 +477,8 @@ func (s *powerGridServer) enterConsoleUser(u *consoleuser.ConsoleUser) {
 		logger.Error("Failed to ensure adapter ON on user switch: %v", err)
 	}
 
-	systemLimit := cfg.ReadSystemChargeLimitStore()
-	if systemLimit == 0 {
-		systemLimit = cfg.ReadSystemChargeLimit()
-	}
-	userLimit := cfg.ReadUserChargeLimitStore(u.UID)
-	if userLimit == 0 {
-		userLimit = cfg.ReadUserChargeLimit(u.HomeDir)
-	}
+systemLimit := cfg.ReadSystemChargeLimit()
+userLimit := cfg.ReadUserChargeLimit(u.HomeDir)
 	effective := cfg.EffectiveChargeLimit(userLimit, systemLimit, defaultChargeLimit)
 	s.mu.Lock()
 	s.currentLimit = int32(effective)
