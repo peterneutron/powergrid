@@ -15,17 +15,16 @@ struct PowerGridApp: App {
     private let notificationHandler = NotificationActionHandler()
     
     let timer = Timer.publish(every: 5, on: .main, in: .common).autoconnect()
+    @State private var isMenuOpen: Bool = false
 
     var body: some Scene {
         MenuBarExtra {
-            AppMenuView(client: client)
+            AppMenuView(client: client, isMenuOpen: $isMenuOpen)
                 .onReceive(timer) { _ in
                     guard client.connectionState == .connected else { return }
-                    Task {
-                        await client.fetchStatus()
-                    }
+                    guard !isMenuOpen else { return }
+                    Task { await client.fetchStatus() }
                 }
-                
         } label: {
             MenuBarLabelView(client: client)
                 .task {
@@ -129,6 +128,7 @@ private struct StatusIconLabel: View {
 
 struct AppMenuView: View {
     @ObservedObject var client: DaemonClient
+    @Binding var isMenuOpen: Bool
     @State private var debugUnlocked: Bool = false
 
     var body: some View {
@@ -164,6 +164,8 @@ struct AppMenuView: View {
         }
         .padding(12)
         .frame(width: 320)
+        .onAppear { isMenuOpen = true }
+        .onDisappear { isMenuOpen = false }
     }
 }
 
@@ -775,7 +777,35 @@ struct FooterActionsView: View {
                                 Task { await client.setPowerFeature(feature: .disableChargingBeforeSleep, enable: newValue) }
                             }
 
-                        Toggle("Low Power Notifications", isOn: $client.userIntent.lowPowerNotificationsEnabled)
+                        Menu("Low Power") {
+                            // Low Power Mode (reflect actual system state)
+                            // Available from macOS 12.0+
+                            let lpmAvailable: Bool = {
+                                if #available(macOS 12.0, *) { return true } else { return false }
+                            }()
+                            if lpmAvailable {
+                                Toggle(
+                                    "Low Power Mode",
+                                    isOn: Binding<Bool>(
+                                        get: { client.status?.lowPowerModeEnabled ?? false },
+                                        set: { newValue in
+                                            Task { await client.setPowerFeature(feature: .lowPowerMode, enable: newValue) }
+                                        }
+                                    )
+                                )
+                            } else {
+                                HStack {
+                                    Text("Low Power Mode")
+                                    Spacer()
+                                    Text("Not available")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+
+                            // Notifications (existing app-level preference)
+                            Toggle("Notifications", isOn: $client.userIntent.lowPowerNotificationsEnabled)
+                        }
 
                         Toggle("Show Battery Details", isOn: $client.userIntent.showBatteryDetails)
                     }
