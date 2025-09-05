@@ -1,13 +1,10 @@
 package main
 
 import (
-    "bytes"
     "context"
     "net"
     "os"
-    "os/exec"
     "os/signal"
-    "strings"
     "sync"
     "syscall"
     "time"
@@ -52,12 +49,7 @@ type powerGridServer struct {
 	lastLEDState                   powerkit.MagsafeLEDState
 }
 
-// Low Power Mode check cache to reduce pmset invocations under polling
-var lpmCache struct {
-    mu    sync.Mutex
-    t     time.Time
-    value bool
-}
+// Low Power Mode is read via powerkit-go's cached helper; no extra cache needed here.
 
 func (s *powerGridServer) GetStatus(_ context.Context, _ *rpc.Empty) (*rpc.StatusResponse, error) {
 	s.mu.RLock()
@@ -99,7 +91,10 @@ func (s *powerGridServer) GetStatus(_ context.Context, _ *rpc.Empty) (*rpc.Statu
 	}
     resp.MagsafeLedControlActive = s.wantMagsafeLED
     resp.MagsafeLedSupported = s.ledSupported
-    resp.LowPowerModeEnabled = getLowPowerModeEnabled()
+    // Low Power Mode via powerkit-go (cached internally by the library)
+    if enabled, available, err := powerkit.GetLowPowerModeEnabled(); err == nil && available {
+        resp.LowPowerModeEnabled = enabled
+    }
     resp.DisableChargingBeforeSleepActive = s.wantDisableChargingBeforeSleep
     // Battery details (best-effort; fields may not be available on all hardware)
     if s.lastIOKitStatus != nil {
@@ -217,17 +212,13 @@ func (s *powerGridServer) SetPowerFeature(_ context.Context, req *rpc.SetPowerFe
 			_ = cfg.WriteUserDisableChargingBeforeSleep(s.currentConsoleUser.HomeDir, enable)
 		}
 		s.mu.Unlock()
-	case rpc.PowerFeature_LOW_POWER_MODE:
-		// Toggle macOS Low Power Mode via pmset (root required; daemon runs as root)
-		target := "0"
-		if req.GetEnable() {
-			target = "1"
-		}
-		if err := exec.Command("/usr/bin/pmset", "-a", "lowpowermode", target).Run(); err != nil {
-			logger.Error("Failed to set lowpowermode=%s: %v", target, err)
-		} else {
-			logger.Default("Set lowpowermode=%s via pmset.", target)
-		}
+    case rpc.PowerFeature_LOW_POWER_MODE:
+        // Use powerkit-go to set Low Power Mode (requires root; daemon runs as root)
+        if err := powerkit.SetLowPowerMode(req.GetEnable()); err != nil {
+            logger.Error("Failed to set Low Power Mode: %v", err)
+        } else {
+            logger.Default("Set Low Power Mode to %v", req.GetEnable())
+        }
 	}
 
 	s.mu.Lock()
@@ -236,40 +227,7 @@ func (s *powerGridServer) SetPowerFeature(_ context.Context, req *rpc.SetPowerFe
 	return &rpc.Empty{}, nil
 }
 
-// getLowPowerModeEnabled returns true if pmset reports lowpowermode=1
-func getLowPowerModeEnabled() bool {
-    // Cache for 2 seconds to avoid frequent process spawn under UI polling
-    lpmCache.mu.Lock()
-    if time.Since(lpmCache.t) < 2*time.Second {
-        v := lpmCache.value
-        lpmCache.mu.Unlock()
-        return v
-    }
-    lpmCache.mu.Unlock()
-
-    cmd := exec.Command("/usr/bin/pmset", "-g")
-    var out bytes.Buffer
-    cmd.Stdout = &out
-    if err := cmd.Run(); err != nil {
-        // On error, do not update cache time to allow quick retry next tick
-        return false
-    }
-    enabled := false
-    for _, line := range strings.Split(out.String(), "\n") {
-        line = strings.TrimSpace(strings.ToLower(line))
-        if strings.HasPrefix(line, "lowpowermode") {
-            if strings.Contains(line, " 1") || strings.HasSuffix(line, "1") {
-                enabled = true
-            }
-            break
-        }
-    }
-    lpmCache.mu.Lock()
-    lpmCache.t = time.Now()
-    lpmCache.value = enabled
-    lpmCache.mu.Unlock()
-    return enabled
-}
+// Low Power Mode status helper removed; use powerkit.GetLowPowerModeEnabled()
 
 func (s *powerGridServer) runChargingLogic(info *powerkit.SystemInfo) {
 	s.mu.Lock()
