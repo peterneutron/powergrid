@@ -1,0 +1,777 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		9E434F3A2E40174A00A33F45 /* GRPCNIOTransportHTTP2 in Frameworks */ = {isa = PBXBuildFile; productRef = 9E434F392E40174A00A33F45 /* GRPCNIOTransportHTTP2 */; };
+		9E434F3F2E40178400A33F45 /* GRPCCore in Frameworks */ = {isa = PBXBuildFile; productRef = 9E434F3E2E40178400A33F45 /* GRPCCore */; };
+		9E434F412E40178400A33F45 /* GRPCInProcessTransport in Frameworks */ = {isa = PBXBuildFile; productRef = 9E434F402E40178400A33F45 /* GRPCInProcessTransport */; };
+		9E434F442E4017AA00A33F45 /* NIOCore in Frameworks */ = {isa = PBXBuildFile; productRef = 9E434F432E4017AA00A33F45 /* NIOCore */; };
+		9E434F472E4017C600A33F45 /* GRPCProtobuf in Frameworks */ = {isa = PBXBuildFile; productRef = 9E434F462E4017C600A33F45 /* GRPCProtobuf */; };
+		9E434F4A2E4017DC00A33F45 /* SwiftProtobuf in Frameworks */ = {isa = PBXBuildFile; productRef = 9E434F492E4017DC00A33F45 /* SwiftProtobuf */; };
+		9EBF2ECF2E47807A002AC2C1 /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = 9EBF2ECE2E47807A002AC2C1 /* AppIcon.icon */; };
+		9ED532C52E41E7630014EC41 /* powergrid-helper in Copy Daemon and Helper */ = {isa = PBXBuildFile; fileRef = 9ED532C32E41E7620014EC41 /* powergrid-helper */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
+		9ED532C62E41E7630014EC41 /* powergrid-daemon in Copy Daemon and Helper */ = {isa = PBXBuildFile; fileRef = 9ED532C42E41E7630014EC41 /* powergrid-daemon */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
+		9ED532C82E41E77B0014EC41 /* com.neutronstar.powergrid.daemon.plist in Copy Daemon and Helper */ = {isa = PBXBuildFile; fileRef = 9ED532C72E41E77B0014EC41 /* com.neutronstar.powergrid.daemon.plist */; };
+		9EEF1D4E2E59FFB500A29A8B /* powergrid-daemon.buildid in Copy Daemon and Helper */ = {isa = PBXBuildFile; fileRef = 9EEF1D4D2E59FFB500A29A8B /* powergrid-daemon.buildid */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXBuildRule section */
+		9E9ECFF32E4F36600044F539 /* PBXBuildRule */ = {
+			isa = PBXBuildRule;
+			compilerSpec = com.apple.compilers.proxy.script;
+			fileType = pattern.proxy;
+			inputFiles = (
+			);
+			isEditable = 1;
+			outputFiles = (
+			);
+			script = "# Type a script or drag a script file from your workspace to insert its path.\n";
+		};
+/* End PBXBuildRule section */
+
+/* Begin PBXContainerItemProxy section */
+		9E434F0E2E40137A00A33F45 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 9E434EF72E40137800A33F45 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 9E434EFE2E40137800A33F45;
+			remoteInfo = PowerGrid;
+		};
+		9E434F182E40137A00A33F45 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 9E434EF72E40137800A33F45 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 9E434EFE2E40137800A33F45;
+			remoteInfo = PowerGrid;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		9ED532C22E41E1380014EC41 /* Copy Daemon and Helper */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 7;
+			files = (
+				9EEF1D4E2E59FFB500A29A8B /* powergrid-daemon.buildid in Copy Daemon and Helper */,
+				9ED532C82E41E77B0014EC41 /* com.neutronstar.powergrid.daemon.plist in Copy Daemon and Helper */,
+				9ED532C52E41E7630014EC41 /* powergrid-helper in Copy Daemon and Helper */,
+				9ED532C62E41E7630014EC41 /* powergrid-daemon in Copy Daemon and Helper */,
+			);
+			name = "Copy Daemon and Helper";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		9E434EFF2E40137800A33F45 /* PowerGrid.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PowerGrid.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		9E434F0D2E40137A00A33F45 /* PowerGridTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PowerGridTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		9E434F172E40137A00A33F45 /* PowerGridUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PowerGridUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		9E9ECFF72E4F399C0044F539 /* project.pbxproj */ = {isa = PBXFileReference; lastKnownFileType = text.pbxproject; name = project.pbxproj; path = PowerGrid.xcodeproj/project.pbxproj; sourceTree = "<group>"; };
+		9EBF2ECE2E47807A002AC2C1 /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = wrapper; path = AppIcon.icon; sourceTree = "<group>"; };
+		9ED532C32E41E7620014EC41 /* powergrid-helper */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.executable"; name = "powergrid-helper"; path = "../../../build-go/powergrid-helper"; sourceTree = "<group>"; };
+		9ED532C42E41E7630014EC41 /* powergrid-daemon */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.executable"; name = "powergrid-daemon"; path = "../../../build-go/powergrid-daemon"; sourceTree = "<group>"; };
+		9ED532C72E41E77B0014EC41 /* com.neutronstar.powergrid.daemon.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; name = com.neutronstar.powergrid.daemon.plist; path = ../../../install/com.neutronstar.powergrid.daemon.plist; sourceTree = "<group>"; };
+		9EEF1D4D2E59FFB500A29A8B /* powergrid-daemon.buildid */ = {isa = PBXFileReference; lastKnownFileType = text; name = "powergrid-daemon.buildid"; path = "../../../build-go/powergrid-daemon.buildid"; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		9ED532CA2E41F0D20014EC41 /* Exceptions for "PowerGrid" folder in "PowerGrid" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 9E434EFE2E40137800A33F45 /* PowerGrid */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		9E434F012E40137800A33F45 /* PowerGrid */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				9ED532CA2E41F0D20014EC41 /* Exceptions for "PowerGrid" folder in "PowerGrid" target */,
+			);
+			path = PowerGrid;
+			sourceTree = "<group>";
+		};
+		9E434F102E40137A00A33F45 /* PowerGridTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = PowerGridTests;
+			sourceTree = "<group>";
+		};
+		9E434F1A2E40137A00A33F45 /* PowerGridUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = PowerGridUITests;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		9E434EFC2E40137800A33F45 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				9E434F412E40178400A33F45 /* GRPCInProcessTransport in Frameworks */,
+				9E434F3F2E40178400A33F45 /* GRPCCore in Frameworks */,
+				9E434F472E4017C600A33F45 /* GRPCProtobuf in Frameworks */,
+				9E434F3A2E40174A00A33F45 /* GRPCNIOTransportHTTP2 in Frameworks */,
+				9E434F4A2E4017DC00A33F45 /* SwiftProtobuf in Frameworks */,
+				9E434F442E4017AA00A33F45 /* NIOCore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		9E434F0A2E40137A00A33F45 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		9E434F142E40137A00A33F45 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		9E434EF62E40137800A33F45 = {
+			isa = PBXGroup;
+			children = (
+				9EEF1D4D2E59FFB500A29A8B /* powergrid-daemon.buildid */,
+				9E9ECFF72E4F399C0044F539 /* project.pbxproj */,
+				9ED532C72E41E77B0014EC41 /* com.neutronstar.powergrid.daemon.plist */,
+				9ED532C42E41E7630014EC41 /* powergrid-daemon */,
+				9ED532C32E41E7620014EC41 /* powergrid-helper */,
+				9E434F012E40137800A33F45 /* PowerGrid */,
+				9E434F102E40137A00A33F45 /* PowerGridTests */,
+				9E434F1A2E40137A00A33F45 /* PowerGridUITests */,
+				9E434F572E40192100A33F45 /* Frameworks */,
+				9E434F002E40137800A33F45 /* Products */,
+				9EBF2ECE2E47807A002AC2C1 /* AppIcon.icon */,
+			);
+			sourceTree = "<group>";
+		};
+		9E434F002E40137800A33F45 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				9E434EFF2E40137800A33F45 /* PowerGrid.app */,
+				9E434F0D2E40137A00A33F45 /* PowerGridTests.xctest */,
+				9E434F172E40137A00A33F45 /* PowerGridUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		9E434F572E40192100A33F45 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		9E434EFE2E40137800A33F45 /* PowerGrid */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 9E434F212E40137A00A33F45 /* Build configuration list for PBXNativeTarget "PowerGrid" */;
+			buildPhases = (
+				9ED532C12E41E0F30014EC41 /* Generate Daemon */,
+				9E434EFB2E40137800A33F45 /* Sources */,
+				9E434EFC2E40137800A33F45 /* Frameworks */,
+				9E434EFD2E40137800A33F45 /* Resources */,
+				9ED532C22E41E1380014EC41 /* Copy Daemon and Helper */,
+			);
+			buildRules = (
+				9E9ECFF32E4F36600044F539 /* PBXBuildRule */,
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				9E434F012E40137800A33F45 /* PowerGrid */,
+			);
+			name = PowerGrid;
+			packageProductDependencies = (
+				9E434F392E40174A00A33F45 /* GRPCNIOTransportHTTP2 */,
+				9E434F3E2E40178400A33F45 /* GRPCCore */,
+				9E434F402E40178400A33F45 /* GRPCInProcessTransport */,
+				9E434F432E4017AA00A33F45 /* NIOCore */,
+				9E434F462E4017C600A33F45 /* GRPCProtobuf */,
+				9E434F492E4017DC00A33F45 /* SwiftProtobuf */,
+			);
+			productName = PowerGrid;
+			productReference = 9E434EFF2E40137800A33F45 /* PowerGrid.app */;
+			productType = "com.apple.product-type.application";
+		};
+		9E434F0C2E40137A00A33F45 /* PowerGridTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 9E434F242E40137A00A33F45 /* Build configuration list for PBXNativeTarget "PowerGridTests" */;
+			buildPhases = (
+				9E434F092E40137A00A33F45 /* Sources */,
+				9E434F0A2E40137A00A33F45 /* Frameworks */,
+				9E434F0B2E40137A00A33F45 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				9E434F0F2E40137A00A33F45 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				9E434F102E40137A00A33F45 /* PowerGridTests */,
+			);
+			name = PowerGridTests;
+			packageProductDependencies = (
+			);
+			productName = PowerGridTests;
+			productReference = 9E434F0D2E40137A00A33F45 /* PowerGridTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		9E434F162E40137A00A33F45 /* PowerGridUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 9E434F272E40137A00A33F45 /* Build configuration list for PBXNativeTarget "PowerGridUITests" */;
+			buildPhases = (
+				9E434F132E40137A00A33F45 /* Sources */,
+				9E434F142E40137A00A33F45 /* Frameworks */,
+				9E434F152E40137A00A33F45 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				9E434F192E40137A00A33F45 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				9E434F1A2E40137A00A33F45 /* PowerGridUITests */,
+			);
+			name = PowerGridUITests;
+			packageProductDependencies = (
+			);
+			productName = PowerGridUITests;
+			productReference = 9E434F172E40137A00A33F45 /* PowerGridUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		9E434EF72E40137800A33F45 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1640;
+				LastUpgradeCheck = 2600;
+				TargetAttributes = {
+					9E434EFE2E40137800A33F45 = {
+						CreatedOnToolsVersion = 16.4;
+					};
+					9E434F0C2E40137A00A33F45 = {
+						CreatedOnToolsVersion = 16.4;
+						TestTargetID = 9E434EFE2E40137800A33F45;
+					};
+					9E434F162E40137A00A33F45 = {
+						CreatedOnToolsVersion = 16.4;
+						TestTargetID = 9E434EFE2E40137800A33F45;
+					};
+				};
+			};
+			buildConfigurationList = 9E434EFA2E40137800A33F45 /* Build configuration list for PBXProject "PowerGrid" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 9E434EF62E40137800A33F45;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				9E434F382E40174A00A33F45 /* XCRemoteSwiftPackageReference "grpc-swift-nio-transport" */,
+				9E434F3D2E40178400A33F45 /* XCRemoteSwiftPackageReference "grpc-swift-2" */,
+				9E434F422E4017AA00A33F45 /* XCRemoteSwiftPackageReference "swift-nio" */,
+				9E434F452E4017C600A33F45 /* XCRemoteSwiftPackageReference "grpc-swift-protobuf" */,
+				9E434F482E4017DC00A33F45 /* XCRemoteSwiftPackageReference "swift-protobuf" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 9E434F002E40137800A33F45 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				9E434EFE2E40137800A33F45 /* PowerGrid */,
+				9E434F0C2E40137A00A33F45 /* PowerGridTests */,
+				9E434F162E40137A00A33F45 /* PowerGridUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		9E434EFD2E40137800A33F45 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				9EBF2ECF2E47807A002AC2C1 /* AppIcon.icon in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		9E434F0B2E40137A00A33F45 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		9E434F152E40137A00A33F45 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		9ED532C12E41E0F30014EC41 /* Generate Daemon */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Generate Daemon";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/zsh;
+			shellScript = "\"${SRCROOT}/../../../scripts/build-go.sh\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		9E434EFB2E40137800A33F45 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		9E434F092E40137A00A33F45 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		9E434F132E40137A00A33F45 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		9E434F0F2E40137A00A33F45 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 9E434EFE2E40137800A33F45 /* PowerGrid */;
+			targetProxy = 9E434F0E2E40137A00A33F45 /* PBXContainerItemProxy */;
+		};
+		9E434F192E40137A00A33F45 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 9E434EFE2E40137800A33F45 /* PowerGrid */;
+			targetProxy = 9E434F182E40137A00A33F45 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		9E434F1F2E40137A00A33F45 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = DB998TJ36H;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.5;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		9E434F202E40137A00A33F45 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = DB998TJ36H;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.5;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Release;
+		};
+		9E434F222E40137A00A33F45 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
+				CODE_SIGN_ENTITLEMENTS = PowerGrid/PowerGrid.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = DB998TJ36H;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = PowerGrid/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = PowerGrid;
+				INFOPLIST_KEY_LSUIElement = YES;
+				INFOPLIST_KEY_NSAppleEventsUsageDescription = "PowerGrid needs your permission to run a script that will install its required helper daemon.";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.neutronstar.PowerGrid;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		9E434F232E40137A00A33F45 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
+				CODE_SIGN_ENTITLEMENTS = PowerGrid/PowerGrid.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = DB998TJ36H;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = PowerGrid/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = PowerGrid;
+				INFOPLIST_KEY_LSUIElement = YES;
+				INFOPLIST_KEY_NSAppleEventsUsageDescription = "PowerGrid needs your permission to run a script that will install its required helper daemon.";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.neutronstar.PowerGrid;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		9E434F252E40137A00A33F45 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = DB998TJ36H;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.5;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.neutronstar.PowerGridTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/PowerGrid.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/PowerGrid";
+			};
+			name = Debug;
+		};
+		9E434F262E40137A00A33F45 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = DB998TJ36H;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.5;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.neutronstar.PowerGridTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/PowerGrid.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/PowerGrid";
+			};
+			name = Release;
+		};
+		9E434F282E40137A00A33F45 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = DB998TJ36H;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.neutronstar.PowerGridUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = PowerGrid;
+			};
+			name = Debug;
+		};
+		9E434F292E40137A00A33F45 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = DB998TJ36H;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.neutronstar.PowerGridUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = PowerGrid;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		9E434EFA2E40137800A33F45 /* Build configuration list for PBXProject "PowerGrid" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				9E434F1F2E40137A00A33F45 /* Debug */,
+				9E434F202E40137A00A33F45 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		9E434F212E40137A00A33F45 /* Build configuration list for PBXNativeTarget "PowerGrid" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				9E434F222E40137A00A33F45 /* Debug */,
+				9E434F232E40137A00A33F45 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		9E434F242E40137A00A33F45 /* Build configuration list for PBXNativeTarget "PowerGridTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				9E434F252E40137A00A33F45 /* Debug */,
+				9E434F262E40137A00A33F45 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		9E434F272E40137A00A33F45 /* Build configuration list for PBXNativeTarget "PowerGridUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				9E434F282E40137A00A33F45 /* Debug */,
+				9E434F292E40137A00A33F45 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		9E434F382E40174A00A33F45 /* XCRemoteSwiftPackageReference "grpc-swift-nio-transport" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/grpc/grpc-swift-nio-transport.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.0.0;
+			};
+		};
+		9E434F3D2E40178400A33F45 /* XCRemoteSwiftPackageReference "grpc-swift-2" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/grpc/grpc-swift-2.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.1.0;
+			};
+		};
+		9E434F422E4017AA00A33F45 /* XCRemoteSwiftPackageReference "swift-nio" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/apple/swift-nio.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.85.0;
+			};
+		};
+		9E434F452E4017C600A33F45 /* XCRemoteSwiftPackageReference "grpc-swift-protobuf" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/grpc/grpc-swift-protobuf.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.0.0;
+			};
+		};
+		9E434F482E4017DC00A33F45 /* XCRemoteSwiftPackageReference "swift-protobuf" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/apple/swift-protobuf.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.30.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		9E434F392E40174A00A33F45 /* GRPCNIOTransportHTTP2 */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 9E434F382E40174A00A33F45 /* XCRemoteSwiftPackageReference "grpc-swift-nio-transport" */;
+			productName = GRPCNIOTransportHTTP2;
+		};
+		9E434F3E2E40178400A33F45 /* GRPCCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 9E434F3D2E40178400A33F45 /* XCRemoteSwiftPackageReference "grpc-swift-2" */;
+			productName = GRPCCore;
+		};
+		9E434F402E40178400A33F45 /* GRPCInProcessTransport */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 9E434F3D2E40178400A33F45 /* XCRemoteSwiftPackageReference "grpc-swift-2" */;
+			productName = GRPCInProcessTransport;
+		};
+		9E434F432E4017AA00A33F45 /* NIOCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 9E434F422E4017AA00A33F45 /* XCRemoteSwiftPackageReference "swift-nio" */;
+			productName = NIOCore;
+		};
+		9E434F462E4017C600A33F45 /* GRPCProtobuf */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 9E434F452E4017C600A33F45 /* XCRemoteSwiftPackageReference "grpc-swift-protobuf" */;
+			productName = GRPCProtobuf;
+		};
+		9E434F492E4017DC00A33F45 /* SwiftProtobuf */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 9E434F482E4017DC00A33F45 /* XCRemoteSwiftPackageReference "swift-protobuf" */;
+			productName = SwiftProtobuf;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 9E434EF72E40137800A33F45 /* Project object */;
+}
