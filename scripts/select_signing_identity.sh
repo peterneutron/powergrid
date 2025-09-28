@@ -20,6 +20,9 @@ identities=()
 display_labels=()
 
 for line in "${identity_lines[@]}"; do
+  if [[ "$line" == *CSSMERR_* ]]; then
+    continue
+  fi
   trimmed=$(printf '%s' "$line" | sed -E 's/^[[:space:]]*//')
   line_no_index=${trimmed#*) }
   fingerprint=${line_no_index%% *}
@@ -32,7 +35,7 @@ for line in "${identity_lines[@]}"; do
 done
 
 if [[ ${#identities[@]} -eq 0 ]]; then
-  echo "error: unable to parse signing identities from 'security find-identity'." >&2
+  echo "error: no valid (non-revoked) code signing identities found. Remove revoked certificates in Keychain Access or create a new Apple Development certificate via Xcode." >&2
   exit 1
 fi
 
@@ -61,7 +64,7 @@ while true; do
     fi
   fi
   echo "Invalid selection. Please choose a number between 1 and ${#identities[@]}." >&2
-end
+done
 
 echo "==> Using signing identity: ${display_labels[$selected_index]}" >&2
 printf '%s' "${identities[$selected_index]}"
