@@ -68,32 +68,34 @@ Before you can build from the command line, you need to configure code signing o
 4.  From the **"Team"** dropdown, select your personal Apple ID. Xcode will automatically create a local development certificate for you.
 5.  You can now close Xcode.
 
-#### 3. Build the App
+#### 3. Pick a Build Lane
 
-From the root of the project directory, run the main `make` command:
+Every lane writes artifacts into `./build` and runs `make proto` as needed to keep generated sources in sync.
 
-```bash
-make
-```
-This command will:
-- Generate the necessary gRPC Swift and Go code.
-- Copy the Swift files into the Xcode project.
-- Build and archive the application.
-- Export a clean, runnable `PowerGrid.app` into a `./build` directory.
+- `make build` – unsigned local build. Equivalent to invoking `make` with no arguments; runs the protobuf generator, copies the Swift stubs, and produces `build/PowerGrid.app` with signing disabled.
+- `make devsigned` – development-signed build using automatic signing. Provide `SIGNING_IDENTITY="Apple Development: Your Name (TEAMID)"` when you know the exact identity; otherwise the Makefile launches `scripts/select_signing_identity.sh` to discover certificates via the `security` tool and prompt you to choose.
+- `make archive` – manual-signing archive for maintainers. Accepts/auto-discovers `SIGNING_IDENTITY` in the same way and creates `build/PowerGrid.xcarchive`.
+- `make export` – exports an `.app` from the latest archive using `ExportOptions.plist`.
+- `make package` – creates `build/PowerGrid.zip` from the unsigned app bundle.
+- `make clean` – removes `./build` plus generated protobuf outputs.
 
 Notes on version pairing and build artifacts:
-- During the build, the daemon is compiled with an ldflags-stamped `BuildID` and a sidecar file `powergrid-daemon.buildid` is produced and bundled into the app. This avoids coupling hashes to code signing.
+- During every build lane, the daemon is compiled with an ldflags-stamped `BuildID` and a sidecar file `powergrid-daemon.buildid` is produced and bundled into the app. This avoids coupling hashes to code signing.
 - The app compares its embedded `BuildID` to the daemon's `GetVersion` response on first connection to decide if an upgrade prompt is needed.
 
-You can now run the app from the `./build` folder.
+> The signing helper script requires the Xcode command line tools and at least one Apple Development certificate in your login keychain.
 
 ## Development Workflow
 
 The `Makefile` provides several targets to streamline development:
 
-- `make`: The default command. Creates a final, optimized `.app` bundle in the `./build` directory.
-- `make proto`: Run this after editing `proto/powergrid.proto` to regenerate the gRPC code for both Swift and Go.
-- `make clean`: Removes all build artifacts and generated code to start fresh.
+- `make build`: Default unsigned lane (same as running `make`). Regenerates protobuf stubs before compiling.
+- `make devsigned`: Development-signed build that auto-selects your certificate if `SIGNING_IDENTITY` is not supplied.
+- `make archive`: Manual-signing archive for release validation.
+- `make export`: Export from the latest archive; tweak `ExportOptions.plist` for different export styles.
+- `make package`: Zip the unsigned app bundle for quick sharing.
+- `make proto`: Regenerate gRPC code only (useful when iterating on `proto/powergrid.proto`).
+- `make clean`: Remove build artifacts and generated code to start fresh.
 - `sudo -E go run ./cmd/powergrid-daemon`: Run the daemon directly for debugging (requires root).
 
 
