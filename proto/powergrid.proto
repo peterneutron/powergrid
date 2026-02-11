@@ -81,4 +81,7 @@ message DaemonInfoResponse {
   bool   magsafe_led_supported = 3;
   string build_id_source = 4; // git, override, fallback, unknown
   bool   build_dirty = 5;
+  uint32 api_major = 6;
+  uint32 api_minor = 7;
+  repeated string capabilities = 8;
 }

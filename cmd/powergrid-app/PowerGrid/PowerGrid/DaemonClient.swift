@@ -69,6 +69,7 @@ struct UserIntent: Equatable {
             case uninstalling
             case installed
             case upgradeAvailable
+            case incompatibleDaemon(String)
             case failed(String)
         }
         
@@ -93,7 +94,14 @@ struct UserIntent: Equatable {
         @Published private(set) var daemonMagsafeLedSupported: Bool = false
         @Published private(set) var daemonBuildIDSource: String?
         @Published private(set) var daemonBuildDirty: Bool = false
+        @Published private(set) var daemonAPIMajor: UInt32 = 0
+        @Published private(set) var daemonAPIMinor: UInt32 = 0
+        @Published private(set) var daemonCapabilities: [String] = []
         private var skipUpgradeThisSession = false
+
+        // App<->daemon compatibility contract.
+        private let expectedAPIMajor: UInt32 = 1
+        private let minimumAPIMinor: UInt32 = 0
         
         init() {
             if let savedValue = UserDefaults.standard.string(forKey: "menuBarDisplayStyle"),
@@ -171,6 +179,7 @@ struct UserIntent: Equatable {
                         let ver = try await client.getVersion(Rpc_Empty())
                         self.installedDaemonBuildID = ver.buildID
                         await refreshDaemonInfo(client)
+                        _ = self.evaluateCompatibility()
                         self.applyUpgradePolicy()
                     } catch {
                         // Older daemon without GetVersion RPC: treat as upgrade available
@@ -178,6 +187,9 @@ struct UserIntent: Equatable {
                             self.installedDaemonBuildID = nil
                             self.daemonBuildIDSource = nil
                             self.daemonBuildDirty = false
+                            self.daemonAPIMajor = 0
+                            self.daemonAPIMinor = 0
+                            self.daemonCapabilities = []
                             if self.embeddedDaemonBuildID != nil {
                                 self.installerState = .upgradeAvailable
                             }
@@ -186,8 +198,12 @@ struct UserIntent: Equatable {
                             self.installedDaemonBuildID = nil
                             self.daemonBuildIDSource = nil
                             self.daemonBuildDirty = false
+                            self.daemonAPIMajor = 0
+                            self.daemonAPIMinor = 0
+                            self.daemonCapabilities = []
                         }
                     }
+                    _ = self.evaluateCompatibility()
                     self.applyUpgradePolicy()
                 }
 
@@ -270,7 +286,9 @@ struct UserIntent: Equatable {
 
                 if connectionState != .connected {
                     connectionState = .connected
-                    if installerState != .upgradeAvailable { installerState = .installed }
+                    if installerState != .upgradeAvailable && !isIncompatibleInstallerState(installerState) {
+                        installerState = .installed
+                    }
                 }
             } catch {
                 if let rpcError = error as? GRPCCore.RPCError {
@@ -313,13 +331,46 @@ struct UserIntent: Equatable {
                 self.daemonMagsafeLedSupported = info.magsafeLedSupported
                 self.daemonBuildIDSource = info.buildIDSource.isEmpty ? nil : info.buildIDSource
                 self.daemonBuildDirty = info.buildDirty
+                self.daemonAPIMajor = info.apiMajor
+                self.daemonAPIMinor = info.apiMinor
+                self.daemonCapabilities = info.capabilities
             } catch {
                 if let rpcError = error as? GRPCCore.RPCError, rpcError.code == .unimplemented {
                     self.daemonAuthMode = nil
                     self.daemonBuildIDSource = nil
                     self.daemonBuildDirty = false
+                    self.daemonAPIMajor = 0
+                    self.daemonAPIMinor = 0
+                    self.daemonCapabilities = []
                 }
             }
+        }
+
+        private func evaluateCompatibility() -> Bool {
+            // Legacy daemon without API fields: keep compatibility, rely on upgrade hinting.
+            if daemonAPIMajor == 0 && daemonAPIMinor == 0 {
+                return true
+            }
+            if daemonAPIMajor != expectedAPIMajor {
+                installerState = .incompatibleDaemon(
+                    "Daemon API v\(daemonAPIMajor).\(daemonAPIMinor) is incompatible with app API v\(expectedAPIMajor).x."
+                )
+                return false
+            }
+            if daemonAPIMinor < minimumAPIMinor {
+                installerState = .incompatibleDaemon(
+                    "Daemon API v\(daemonAPIMajor).\(daemonAPIMinor) is older than required v\(expectedAPIMajor).\(minimumAPIMinor)."
+                )
+                return false
+            }
+            return true
+        }
+
+        private func isIncompatibleInstallerState(_ state: InstallerState) -> Bool {
+            if case .incompatibleDaemon = state {
+                return true
+            }
+            return false
         }
 
         private func classifyEmbeddedBuild() -> BuildClassification {
@@ -342,6 +393,9 @@ struct UserIntent: Equatable {
 
         private func applyUpgradePolicy() {
             if skipUpgradeThisSession {
+                return
+            }
+            if isIncompatibleInstallerState(installerState) {
                 return
             }
 
@@ -368,6 +422,7 @@ struct UserIntent: Equatable {
         func setLimit(_ newLimit: Int) async {
             log("Setting charge limit to \(newLimit)%")
             guard let client = self.client else { return }
+            guard evaluateCompatibility() else { return }
             
             var request = Rpc_MutationRequest()
             request.operation = .setChargeLimit
@@ -401,6 +456,7 @@ struct UserIntent: Equatable {
         func setPowerFeature(feature: Rpc_PowerFeature, enable: Bool) async {
             log("Setting feature \(feature) to \(enable)")
             guard let client = self.client else { return }
+            guard evaluateCompatibility() else { return }
             var req = Rpc_MutationRequest()
             req.operation = .setPowerFeature
             req.feature = feature
@@ -477,8 +533,9 @@ struct UserIntent: Equatable {
                     let ver = try await client.getVersion(Rpc_Empty())
                     self.installedDaemonBuildID = ver.buildID
                     await refreshDaemonInfo(client)
+                    _ = evaluateCompatibility()
                     self.applyUpgradePolicy()
-                    if self.installerState != .upgradeAvailable {
+                    if self.installerState != .upgradeAvailable && !isIncompatibleInstallerState(self.installerState) {
                         self.installerState = .installed
                     }
                     return
