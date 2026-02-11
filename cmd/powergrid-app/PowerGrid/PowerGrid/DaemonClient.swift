@@ -320,8 +320,15 @@ struct UserIntent: Equatable {
             do {
                 _ = try await client.applyMutation(request)
             } catch {
-                if let rpcError = error as? GRPCCore.RPCError, rpcError.code == .permissionDenied {
-                    self.installerState = .failed("Permission denied: active console user authorization is required.")
+                if let rpcError = error as? GRPCCore.RPCError {
+                    switch rpcError.code {
+                    case .permissionDenied:
+                        self.installerState = .failed("Permission denied: active console user authorization is required.")
+                    case .invalidArgument:
+                        self.installerState = .failed("Invalid request: \(rpcError.message)")
+                    default:
+                        self.installerState = .failed("Daemon mutation failed: \(rpcError.message)")
+                    }
                 }
                 print("Error setting limit: \(error)")
             }
@@ -345,8 +352,15 @@ struct UserIntent: Equatable {
             do {
                 _ = try await client.applyMutation(req)
             } catch {
-                if let rpcError = error as? GRPCCore.RPCError, rpcError.code == .permissionDenied {
-                    self.installerState = .failed("Permission denied: active console user authorization is required.")
+                if let rpcError = error as? GRPCCore.RPCError {
+                    switch rpcError.code {
+                    case .permissionDenied:
+                        self.installerState = .failed("Permission denied: active console user authorization is required.")
+                    case .invalidArgument:
+                        self.installerState = .failed("Invalid request: \(rpcError.message)")
+                    default:
+                        self.installerState = .failed("Daemon mutation failed: \(rpcError.message)")
+                    }
                 }
                 print("Error setting power feature: \(error)")
             }
