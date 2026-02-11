@@ -1,0 +1,51 @@
+name: powergrid-ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Install xcodegen
+        run: |
+          VERSION=2.44.1
+          curl -fsSL -o /tmp/xcodegen.zip "https://github.com/yonaskolb/XcodeGen/releases/download/${VERSION}/xcodegen.zip"
+          unzip -q /tmp/xcodegen.zip -d /tmp/xcodegen
+          chmod +x /tmp/xcodegen/bin/xcodegen
+          sudo mv /tmp/xcodegen/bin/xcodegen /usr/local/bin/xcodegen
+
+      - name: Go test
+        run: go test ./...
+
+      - name: Go vet
+        run: go vet ./...
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+
+      - name: Proto check
+        run: make proto-check
+
+      - name: XcodeGen check
+        run: make xcodegen-check
+
+      - name: Swift tests
+        run: |
+          xcodebuild test \
+            -project cmd/powergrid-app/PowerGrid/PowerGrid.xcodeproj \
+            -scheme PowerGrid \
+            -destination 'platform=macOS' \
+            CODE_SIGNING_ALLOWED=NO \
+            -only-testing:PowerGridTests

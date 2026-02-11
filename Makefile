@@ -4,37 +4,47 @@ SHELL := /bin/bash
 APP_NAME        ?= PowerGrid
 PROJECT_DIR     ?= ./cmd/powergrid-app/PowerGrid
 PROJECT         ?= $(PROJECT_DIR)/$(APP_NAME).xcodeproj
+XCODEGEN_PROJECT ?= $(PROJECT_DIR)
+XCODEGEN_SPEC   ?= ./project.yml
 SCHEME          ?= PowerGrid
 CONFIGURATION   ?= Release
 BUILD_DIR       ?= ./build
+BUILD_DIR_STAMP := $(BUILD_DIR)/.dir-stamp
 DERIVED_DATA    := $(BUILD_DIR)/DerivedData
 ARCHIVE         := $(BUILD_DIR)/$(SCHEME).xcarchive
 EXPORT_OPTIONS  ?= ./ExportOptions.plist
 APP_BUNDLE      := $(BUILD_DIR)/$(APP_NAME).app
 
 # Scripts & generated sources
-SIGNING_IDENTITY_SCRIPT := ./scripts/select_signing_identity.sh
+SIGNING_RESOLVER_SCRIPT := ./scripts/resolve-signing.sh
 PROTO_SCRIPT            ?= ./scripts/gen_proto.sh
 GENERATED_SWIFT_DIR     ?= ./generated/swift
 TARGET_SWIFT_DIR        ?= $(PROJECT_DIR)/$(APP_NAME)/internal/rpc
 
-.PHONY: all build devsigned archive export package proto proto-check test vet lint verify clean release
+.PHONY: all build devsigned archive export package proto proto-check xcodegen xcodegen-check swift-test test vet lint verify clean release
 
 all: build
 release: build
 
-$(BUILD_DIR):
+$(BUILD_DIR_STAMP):
 	@mkdir -p $(BUILD_DIR)
+	@touch $(BUILD_DIR_STAMP)
+
+xcodegen:
+	@echo "--> Generating Xcode project from $(XCODEGEN_SPEC)"
+	@xcodegen generate --spec "$(XCODEGEN_SPEC)" --project "$(XCODEGEN_PROJECT)"
+	@echo "✅ Xcode project generated at $(PROJECT)"
+
+xcodegen-check:
+	@bash ./scripts/xcodegen-check.sh
 
 proto:
 	@echo "--> Running protobuf generation script..."
 	@bash $(PROTO_SCRIPT)
-	@echo "--> Copying generated Swift files into the project..."
-	@cp $(GENERATED_SWIFT_DIR)/*.swift $(TARGET_SWIFT_DIR)/
 	@echo "✅ Swift files copied to $(TARGET_SWIFT_DIR)"
 
 # -------- Lane A: unsigned local build (default) --------
-build: proto $(BUILD_DIR)
+build: xcodegen proto $(BUILD_DIR_STAMP)
 	@echo "--> Building unsigned $(APP_NAME) (scheme=$(SCHEME), configuration=$(CONFIGURATION))"
 	xcodebuild \
 	  -project "$(PROJECT)" \
@@ -49,21 +59,11 @@ build: proto $(BUILD_DIR)
 	@echo "✅ Unsigned app available at $(APP_BUNDLE)"
 
 # -------- Lane B: automatically signed developer build --------
-devsigned: proto $(BUILD_DIR)
+devsigned: xcodegen proto $(BUILD_DIR_STAMP)
 	@echo "--> Building with Automatic signing"
-	@identity="$$SIGNING_IDENTITY"; \
-	if [[ -z "$$identity" ]]; then \
-	  if [[ ! -x "$(SIGNING_IDENTITY_SCRIPT)" ]]; then \
-	    echo "error: missing signing identity script at $(SIGNING_IDENTITY_SCRIPT)" >&2; \
-	    exit 1; \
-	  fi; \
-	  identity="$$($(SIGNING_IDENTITY_SCRIPT))"; \
-	fi; \
-	team_id="$$(printf '%s\n' "$$identity" | sed -n 's/.*(\([A-Z0-9]\{10\}\)).*/\1/p')"; \
-	if [[ -z "$$team_id" ]]; then \
-	  echo "error: could not derive DEVELOPMENT_TEAM from signing identity '$$identity'" >&2; \
-	  exit 1; \
-	fi; \
+	@eval "$$($(SIGNING_RESOLVER_SCRIPT))"; \
+	identity="$$SIGNING_IDENTITY"; \
+	team_id="$$DEVELOPMENT_TEAM"; \
 	echo "--> Using team $$team_id"; \
 	xcodebuild \
 	  -project "$(PROJECT)" \
@@ -81,21 +81,11 @@ devsigned: proto $(BUILD_DIR)
 	@echo "✅ Dev-signed app available at $(APP_BUNDLE)"
 
 # -------- Lane C: distribution archive (maintainers) --------
-archive: $(BUILD_DIR)
+archive: xcodegen proto $(BUILD_DIR_STAMP)
 	@echo "--> Archiving $(APP_NAME) for distribution"
-	@identity="$$SIGNING_IDENTITY"; \
-	if [[ -z "$$identity" ]]; then \
-	  if [[ ! -x "$(SIGNING_IDENTITY_SCRIPT)" ]]; then \
-	    echo "error: missing signing identity script at $(SIGNING_IDENTITY_SCRIPT)" >&2; \
-	    exit 1; \
-	  fi; \
-	  identity="$$($(SIGNING_IDENTITY_SCRIPT))"; \
-	fi; \
-	team_id="$$(printf '%s\n' "$$identity" | sed -n 's/.*(\([A-Z0-9]\{10\}\)).*/\1/p')"; \
-	if [[ -z "$$team_id" ]]; then \
-	  echo "error: could not derive DEVELOPMENT_TEAM from signing identity '$$identity'" >&2; \
-	  exit 1; \
-	fi; \
+	@eval "$$(REQUIRE_NONINTERACTIVE=1 ALLOW_INTERACTIVE=0 $(SIGNING_RESOLVER_SCRIPT))"; \
+	identity="$$SIGNING_IDENTITY"; \
+	team_id="$$DEVELOPMENT_TEAM"; \
 	xcodebuild \
 	  -project "$(PROJECT)" \
 	  -scheme "$(SCHEME)" \
@@ -138,7 +128,14 @@ vet:
 lint:
 	@golangci-lint run
 
-proto-check: proto
-	@git diff --exit-code -- generated/go cmd/powergrid-app/PowerGrid/PowerGrid/internal/rpc
+proto-check:
+	@bash ./scripts/proto-check.sh
 
-verify: test vet
+verify: test vet lint proto-check xcodegen-check swift-test
+swift-test: xcodegen proto
+	@xcodebuild test \
+	  -project "$(PROJECT)" \
+	  -scheme "$(SCHEME)" \
+	  -destination 'platform=macOS' \
+	  CODE_SIGNING_ALLOWED=NO \
+	  -only-testing:PowerGridTests
