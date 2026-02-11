@@ -48,10 +48,6 @@ message StatusResponse {
   float  battery_temperature_c = 33;      // °C
 }
 
-message SetChargeLimitRequest {
-  int32 limit = 1; // The new charge limit, e.g., 80.
-}
-
 enum PowerFeature {
   POWER_FEATURE_UNSPECIFIED = 0;
   PREVENT_DISPLAY_SLEEP = 1;
@@ -60,11 +56,6 @@ enum PowerFeature {
   CONTROL_MAGSAFE_LED = 4;
   LOW_POWER_MODE = 5; // Toggle macOS Low Power Mode
   DISABLE_CHARGING_BEFORE_SLEEP = 6; // Toggle disabling charging before sleep
-}
-
-message SetPowerFeatureRequest {
-  PowerFeature feature = 1;
-  bool enable = 2;
 }
 
 enum MutationOperation {
