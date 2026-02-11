@@ -121,8 +121,21 @@ if [ -n "${DAEMON_BUILD_ID}" ]; then
 elif command -v git >/dev/null 2>&1 && [ -d "${PROJECT_ROOT}/.git" ]; then
     DAEMON_BUILD_ID=$(git -C "${PROJECT_ROOT}" rev-parse --short=12 HEAD:cmd/powergrid-daemon || true)
     DIRTY_SUFFIX=""
-    STATUS=$(git -C "${PROJECT_ROOT}" status --porcelain || true)
-    if [ -n "${STATUS}" ]; then
+    # Keep sandbox-friendly: check only build-relevant paths instead of repo-wide status.
+    DIRTY_PATHS=(
+        "cmd/powergrid-daemon"
+        "cmd/powergrid-helper"
+        "scripts/build-go.sh"
+        "go.mod"
+        "go.sum"
+    )
+    if ! git -C "${PROJECT_ROOT}" diff --quiet -- "${DIRTY_PATHS[@]}" 2>/dev/null; then
+        DIRTY_SUFFIX="-dirty"
+        BUILD_DIRTY="true"
+    elif ! git -C "${PROJECT_ROOT}" diff --cached --quiet -- "${DIRTY_PATHS[@]}" 2>/dev/null; then
+        DIRTY_SUFFIX="-dirty"
+        BUILD_DIRTY="true"
+    elif [ -n "$(git -C "${PROJECT_ROOT}" ls-files --others --exclude-standard -- "${DIRTY_PATHS[@]}" 2>/dev/null)" ]; then
         DIRTY_SUFFIX="-dirty"
         BUILD_DIRTY="true"
     fi
@@ -175,10 +188,15 @@ echo "--- Building powergrid-helper ---"
 
 echo "✅ Go binaries built successfully."
 
-# If invoked from Xcode, also copy the sidecar into the built app's Resources
-# if [ -n "$SRCROOT" ] && [ -n "$TARGET_BUILD_DIR" ] && [ -n "$UNLOCALIZED_RESOURCES_FOLDER_PATH" ]; then
-#   DEST_DIR="${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}"
-#   mkdir -p "$DEST_DIR"
-#   cp "${BUILD_OUTPUT_DIR}/powergrid-daemon.buildid" "$DEST_DIR/"
-#   echo "✅ Copied powergrid-daemon.buildid to app Resources: $DEST_DIR"
-# fi
+# If invoked from Xcode, copy runtime artifacts into app Resources.
+if [ -n "${SRCROOT:-}" ] && [ -n "${TARGET_BUILD_DIR:-}" ] && [ -n "${UNLOCALIZED_RESOURCES_FOLDER_PATH:-}" ]; then
+    DEST_DIR="${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}"
+    mkdir -p "${DEST_DIR}"
+
+    cp "${BUILD_OUTPUT_DIR}/powergrid-daemon" "${DEST_DIR}/powergrid-daemon"
+    cp "${BUILD_OUTPUT_DIR}/powergrid-helper" "${DEST_DIR}/powergrid-helper"
+    cp "${BUILD_OUTPUT_DIR}/powergrid-daemon.buildid" "${DEST_DIR}/powergrid-daemon.buildid"
+    cp "${PROJECT_ROOT}/install/com.neutronstar.powergrid.daemon.plist" "${DEST_DIR}/com.neutronstar.powergrid.daemon.plist"
+
+    echo "✅ Copied daemon/helper/buildid/plist to app Resources: ${DEST_DIR}"
+fi
