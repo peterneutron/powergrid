@@ -313,11 +313,12 @@ struct UserIntent: Equatable {
             log("Setting charge limit to \(newLimit)%")
             guard let client = self.client else { return }
             
-            var request = Rpc_SetChargeLimitRequest()
+            var request = Rpc_MutationRequest()
+            request.operation = .setChargeLimit
             request.limit = Int32(newLimit)
             
             do {
-                _ = try await client.setChargeLimit(request)
+                _ = try await client.applyMutation(request)
             } catch {
                 if let rpcError = error as? GRPCCore.RPCError, rpcError.code == .permissionDenied {
                     self.installerState = .failed("Permission denied: active console user authorization is required.")
@@ -337,11 +338,12 @@ struct UserIntent: Equatable {
         func setPowerFeature(feature: Rpc_PowerFeature, enable: Bool) async {
             log("Setting feature \(feature) to \(enable)")
             guard let client = self.client else { return }
-            var req = Rpc_SetPowerFeatureRequest()
+            var req = Rpc_MutationRequest()
+            req.operation = .setPowerFeature
             req.feature = feature
             req.enable = enable
             do {
-                _ = try await client.setPowerFeature(req)
+                _ = try await client.applyMutation(req)
             } catch {
                 if let rpcError = error as? GRPCCore.RPCError, rpcError.code == .permissionDenied {
                     self.installerState = .failed("Permission denied: active console user authorization is required.")

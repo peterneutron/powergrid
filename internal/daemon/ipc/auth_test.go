@@ -37,7 +37,7 @@ func TestCallerUIDFromContextRejectsNonUIDAddr(t *testing.T) {
 func TestIsAuthorized(t *testing.T) {
 	active := func() (uint32, bool) { return 502, true }
 
-	if !isAuthorized(0, "/rpc.PowerGrid/SetChargeLimit", active) {
+	if !isAuthorized(0, "/rpc.PowerGrid/ApplyMutation", active) {
 		t.Fatal("root caller should be authorized")
 	}
 	if !isAuthorized(502, "/rpc.PowerGrid/GetStatus", active) {
@@ -46,10 +46,10 @@ func TestIsAuthorized(t *testing.T) {
 	if !isAuthorized(502, "/rpc.PowerGrid/GetDaemonInfo", active) {
 		t.Fatal("active user should be authorized for daemon info")
 	}
-	if !isAuthorized(502, "/rpc.PowerGrid/SetPowerFeature", active) {
+	if !isAuthorized(502, "/rpc.PowerGrid/ApplyMutation", active) {
 		t.Fatal("active user should be authorized for mutating calls")
 	}
-	if isAuthorized(503, "/rpc.PowerGrid/SetPowerFeature", active) {
+	if isAuthorized(503, "/rpc.PowerGrid/ApplyMutation", active) {
 		t.Fatal("non-active non-root caller should not be authorized")
 	}
 	if isAuthorized(502, "/rpc.PowerGrid/Unknown", active) {
