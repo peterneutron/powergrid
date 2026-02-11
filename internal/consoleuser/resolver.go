@@ -1,10 +1,10 @@
 package consoleuser
 
 import (
-    "os"
-    "os/user"
-    "strconv"
-    "syscall"
+	"os"
+	"os/user"
+	"strconv"
+	"syscall"
 )
 
 type ConsoleUser struct {
@@ -25,7 +25,7 @@ func Current() (*ConsoleUser, error) {
 	if st.Uid == 0 {
 		return nil, nil
 	}
-    u, err := user.LookupId(strconv.Itoa(int(st.Uid)))
+	u, err := user.LookupId(strconv.Itoa(int(st.Uid)))
 	if err != nil {
 		return &ConsoleUser{UID: st.Uid}, nil
 	}
