@@ -319,6 +319,9 @@ struct UserIntent: Equatable {
             do {
                 _ = try await client.setChargeLimit(request)
             } catch {
+                if let rpcError = error as? GRPCCore.RPCError, rpcError.code == .permissionDenied {
+                    self.installerState = .failed("Permission denied: active console user authorization is required.")
+                }
                 print("Error setting limit: \(error)")
             }
             
@@ -340,6 +343,9 @@ struct UserIntent: Equatable {
             do {
                 _ = try await client.setPowerFeature(req)
             } catch {
+                if let rpcError = error as? GRPCCore.RPCError, rpcError.code == .permissionDenied {
+                    self.installerState = .failed("Permission denied: active console user authorization is required.")
+                }
                 print("Error setting power feature: \(error)")
             }
             
