@@ -10,6 +10,7 @@ import (
 type ConsoleUser struct {
 	Username string
 	UID      uint32
+	GID      uint32
 	HomeDir  string
 }
 
@@ -29,7 +30,11 @@ func Current() (*ConsoleUser, error) {
 	if err != nil {
 		return &ConsoleUser{UID: st.Uid}, nil
 	}
-	return &ConsoleUser{Username: u.Username, UID: st.Uid, HomeDir: u.HomeDir}, nil
+	gid, err := strconv.Atoi(u.Gid)
+	if err != nil {
+		return &ConsoleUser{Username: u.Username, UID: st.Uid, HomeDir: u.HomeDir}, nil
+	}
+	return &ConsoleUser{Username: u.Username, UID: st.Uid, GID: uint32(gid), HomeDir: u.HomeDir}, nil
 }
 
 // intToString removed in favor of strconv.Itoa for clarity and correctness
