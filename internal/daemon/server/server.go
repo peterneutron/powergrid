@@ -48,6 +48,7 @@ type Daemon struct {
 	ledSupported                   bool
 	lastLEDState                   powerkit.MagsafeLEDState
 	buildID                        string
+	batteryUpdateCh                chan *powerkit.SystemInfo
 }
 
 // Low Power Mode is read via powerkit-go's cached helper; no extra cache needed here.
@@ -253,6 +254,54 @@ func (s *Daemon) runChargingLogic(info *powerkit.SystemInfo) {
 	s.runChargingLogicLocked(info)
 }
 
+func (s *Daemon) enqueueBatteryUpdate(info *powerkit.SystemInfo) {
+	if s.batteryUpdateCh == nil {
+		return
+	}
+	select {
+	case s.batteryUpdateCh <- info:
+	default:
+		// Backpressure strategy: drop intermediate updates; latest state wins.
+	}
+}
+
+func (s *Daemon) startBatteryCoalescer() {
+	if s.batteryUpdateCh == nil {
+		s.batteryUpdateCh = make(chan *powerkit.SystemInfo, 64)
+	}
+
+	go func() {
+		const debounce = 350 * time.Millisecond
+
+		var latest *powerkit.SystemInfo
+		timer := time.NewTimer(debounce)
+		if !timer.Stop() {
+			<-timer.C
+		}
+		timerActive := false
+
+		for {
+			select {
+			case info := <-s.batteryUpdateCh:
+				latest = info
+				if timerActive && !timer.Stop() {
+					<-timer.C
+				}
+				timer.Reset(debounce)
+				timerActive = true
+			case <-timer.C:
+				timerActive = false
+				if latest != nil {
+					s.runChargingLogic(latest)
+				} else {
+					s.runChargingLogic(nil)
+				}
+				latest = nil
+			}
+		}
+	}()
+}
+
 func (s *Daemon) runChargingLogicLocked(info *powerkit.SystemInfo) {
 	var err error
 	if info == nil {
@@ -351,11 +400,7 @@ func (s *Daemon) startEventStream() {
 
 		case powerkit.EventTypeBatteryUpdate:
 			logger.Info("Received a battery status update, running charging logic.")
-			if event.Info != nil {
-				s.runChargingLogic(event.Info)
-			} else {
-				s.runChargingLogic(nil)
-			}
+			s.enqueueBatteryUpdate(event.Info)
 		default:
 			if event.Info != nil {
 				s.runChargingLogic(event.Info)
@@ -489,7 +534,7 @@ func Run(buildID string) error {
 		return fmt.Errorf("failed to listen on socket: %w", err)
 	}
 
-	server := &Daemon{currentLimit: defaultChargeLimit, buildID: buildID}
+	server := &Daemon{currentLimit: defaultChargeLimit, buildID: buildID, batteryUpdateCh: make(chan *powerkit.SystemInfo, 64)}
 	grpcServer := grpc.NewServer(
 		grpc.UnaryInterceptor(ipc.AuthUnaryInterceptor(func() (uint32, bool) {
 			server.mu.RLock()
@@ -503,11 +548,12 @@ func Run(buildID string) error {
 	rpc.RegisterPowerGridServer(grpcServer, server)
 
 	server.startConsoleUserEventHandler()
+	server.startBatteryCoalescer()
 
 	go server.startEventStream()
 
 	go func() {
-		ticker := time.NewTicker(15 * time.Second)
+		ticker := time.NewTicker(60 * time.Second)
 		defer ticker.Stop()
 		for range ticker.C {
 			server.runChargingLogic(nil)
