@@ -43,6 +43,9 @@ func TestIsAuthorized(t *testing.T) {
 	if !isAuthorized(502, "/rpc.PowerGrid/GetStatus", active) {
 		t.Fatal("active user should be authorized for read")
 	}
+	if !isAuthorized(502, "/rpc.PowerGrid/GetDaemonInfo", active) {
+		t.Fatal("active user should be authorized for daemon info")
+	}
 	if !isAuthorized(502, "/rpc.PowerGrid/SetPowerFeature", active) {
 		t.Fatal("active user should be authorized for mutating calls")
 	}
