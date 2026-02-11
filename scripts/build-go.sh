@@ -1,14 +1,9 @@
-#
-# =================================================================
-# BUILDS THE GO BINARIES
-# =================================================================
-
-set -e
+#!/bin/bash
+set -euo pipefail
 
 echo "--- Building Go Binaries ---"
 
 resolve_go() {
-    # Highest priority: explicit override.
     if [ -n "${GO_BIN:-}" ]; then
         if [ -x "${GO_BIN}" ]; then
             echo "${GO_BIN}"
@@ -18,13 +13,11 @@ resolve_go() {
         exit 1
     fi
 
-    # Standard PATH.
     if command -v go >/dev/null 2>&1; then
         command -v go
         return 0
     fi
 
-    # Common non-Homebrew locations.
     for candidate in \
         "${HOME}/.nix-profile/bin/go" \
         "${HOME}/go/bin/go" \
@@ -55,28 +48,37 @@ ERR
     exit 1
 }
 
-compute_build_id_fallback() {
-    # Deterministic fallback for source snapshots without git metadata.
+hash_daemon_sources() {
     local digest_input
-    digest_input="$(
-        find "${DAEMON_SOURCE_DIR}" -type f -print | sort | while read -r f; do
-            printf '%s\n' "${f#${PROJECT_ROOT}/}"
-            shasum -a 256 "$f" | awk '{print $1}'
-        done
-    )"
+    digest_input="$({
+        find "${DAEMON_SOURCE_DIR}" -type f -print | sort
+        printf '%s\n' "${PROJECT_ROOT}/go.mod"
+        printf '%s\n' "${PROJECT_ROOT}/go.sum"
+    } | while read -r f; do
+        [ -f "$f" ] || continue
+        printf '%s\n' "${f#${PROJECT_ROOT}/}"
+        shasum -a 256 "$f" | awk '{print $1}'
+    done)"
+
     if command -v shasum >/dev/null 2>&1; then
         printf '%s' "${digest_input}" | shasum -a 256 | awk '{print substr($1,1,12)}'
     elif command -v md5 >/dev/null 2>&1; then
         printf '%s' "${digest_input}" | md5 | awk '{print substr($NF,1,12)}'
     else
-        # Last resort: stable string length checksum.
         printf '%s' "${digest_input}" | cksum | awk '{print substr($1,1,12)}'
     fi
 }
 
-# =================================================================
-# 1. ENVIRONMENT & ROOT RESOLUTION
-# =================================================================
+append_flag() {
+    local current="$1"
+    local flag="$2"
+    if [ -z "${current}" ]; then
+        printf '%s' "${flag}"
+    else
+        printf '%s %s' "${current}" "${flag}"
+    fi
+}
+
 if [ -n "${PROJECT_ROOT:-}" ]; then
     echo "Using PROJECT_ROOT override: ${PROJECT_ROOT}"
 elif [ -n "${SRCROOT:-}" ]; then
@@ -94,21 +96,22 @@ GO_BIN_RESOLVED="$(resolve_go)"
 echo "Using go binary: ${GO_BIN_RESOLVED}"
 "${GO_BIN_RESOLVED}" version
 
-# =================================================================
-# 2. DEFINE PATHS (Now that the environment is set)
-# =================================================================
-BUILD_OUTPUT_DIR="${PROJECT_ROOT}/build-go"
 DAEMON_SOURCE_DIR="${PROJECT_ROOT}/cmd/powergrid-daemon"
 HELPER_SOURCE_DIR="${PROJECT_ROOT}/cmd/powergrid-helper"
+XCODE_MODE=0
+if [ -n "${SRCROOT:-}" ] && [ -n "${DERIVED_FILE_DIR:-}" ]; then
+    XCODE_MODE=1
+fi
+
+if [ "${XCODE_MODE}" -eq 1 ]; then
+    BUILD_OUTPUT_DIR="${DERIVED_FILE_DIR}/powergrid-go"
+else
+    BUILD_OUTPUT_DIR="${PROJECT_ROOT}/build-go"
+fi
 DAEMON_BUILDMETA_PATH="${BUILD_OUTPUT_DIR}/powergrid-daemon.buildmeta"
 
-# =================================================================
-# 3. BUILDING
-# =================================================================
-echo "--- Starting Go Compilation ---"
 mkdir -p "${BUILD_OUTPUT_DIR}"
 
-# Derive daemon BuildID from override, git, or deterministic fallback.
 echo "--- Computing daemon BuildID ---"
 BUILD_ID_SOURCE="${DAEMON_BUILD_SOURCE:-}"
 BUILD_DIRTY="false"
@@ -118,10 +121,12 @@ if [ -n "${DAEMON_BUILD_ID}" ]; then
     if [ -z "${BUILD_ID_SOURCE}" ]; then
         BUILD_ID_SOURCE="override"
     fi
+elif [ "${XCODE_MODE}" -eq 1 ]; then
+    DAEMON_BUILD_ID="$(hash_daemon_sources)-xcode"
+    BUILD_ID_SOURCE="xcode-derived"
 elif command -v git >/dev/null 2>&1 && [ -d "${PROJECT_ROOT}/.git" ]; then
     DAEMON_BUILD_ID=$(git -C "${PROJECT_ROOT}" rev-parse --short=12 HEAD:cmd/powergrid-daemon || true)
     DIRTY_SUFFIX=""
-    # Keep sandbox-friendly: check only build-relevant paths instead of repo-wide status.
     DIRTY_PATHS=(
         "cmd/powergrid-daemon"
         "cmd/powergrid-helper"
@@ -140,15 +145,13 @@ elif command -v git >/dev/null 2>&1 && [ -d "${PROJECT_ROOT}/.git" ]; then
         BUILD_DIRTY="true"
     fi
     DAEMON_BUILD_ID="${DAEMON_BUILD_ID}${DIRTY_SUFFIX}"
-    if [ -n "${DAEMON_BUILD_ID}" ]; then
-        if [ -z "${BUILD_ID_SOURCE}" ]; then
-            BUILD_ID_SOURCE="git"
-        fi
+    if [ -n "${DAEMON_BUILD_ID}" ] && [ -z "${BUILD_ID_SOURCE}" ]; then
+        BUILD_ID_SOURCE="git"
     fi
 fi
 
 if [ -z "${DAEMON_BUILD_ID}" ]; then
-    DAEMON_BUILD_ID="$(compute_build_id_fallback)-fallback"
+    DAEMON_BUILD_ID="$(hash_daemon_sources)-fallback"
     if [ -z "${BUILD_ID_SOURCE}" ]; then
         BUILD_ID_SOURCE="fallback"
     fi
@@ -163,40 +166,28 @@ fi
 if [[ "${DAEMON_BUILD_ID}" == *"-dirty" ]]; then
     BUILD_DIRTY="true"
 fi
-if [[ "${DAEMON_BUILD_ID}" == *"-fallback" && -z "${DAEMON_BUILD_SOURCE:-}" ]]; then
-    BUILD_ID_SOURCE="fallback"
-fi
 
 echo "Daemon BuildID: ${DAEMON_BUILD_ID} (source=${BUILD_ID_SOURCE}, dirty=${BUILD_DIRTY})"
 
-# Build steps (stamp BuildID via ldflags)
-echo "--- Building powergrid-daemon ---"
-"${GO_BIN_RESOLVED}" build -ldflags "-X 'main.BuildID=${DAEMON_BUILD_ID}' -X 'main.BuildIDSource=${BUILD_ID_SOURCE}' -X 'main.BuildDirty=${BUILD_DIRTY}'" -o "${BUILD_OUTPUT_DIR}/powergrid-daemon" "${DAEMON_SOURCE_DIR}"
+# Keep the Go/Cgo deployment target aligned with project target.
+export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-15.5}"
+export CGO_CFLAGS="$(append_flag "${CGO_CFLAGS:-}" "-mmacosx-version-min=${MACOSX_DEPLOYMENT_TARGET}")"
+export CGO_LDFLAGS="$(append_flag "${CGO_LDFLAGS:-}" "-mmacosx-version-min=${MACOSX_DEPLOYMENT_TARGET}")"
 
-# Write sidecar BuildID file for the app bundle to read at runtime
+echo "--- Building powergrid-daemon ---"
+"${GO_BIN_RESOLVED}" build \
+    -ldflags "-X 'main.BuildID=${DAEMON_BUILD_ID}' -X 'main.BuildIDSource=${BUILD_ID_SOURCE}' -X 'main.BuildDirty=${BUILD_DIRTY}'" \
+    -o "${BUILD_OUTPUT_DIR}/powergrid-daemon" \
+    "${DAEMON_SOURCE_DIR}"
+
 echo "${DAEMON_BUILD_ID}" > "${BUILD_OUTPUT_DIR}/powergrid-daemon.buildid"
-echo "Wrote sidecar: ${BUILD_OUTPUT_DIR}/powergrid-daemon.buildid"
-cat > "${DAEMON_BUILDMETA_PATH}" <<EOF
+cat > "${DAEMON_BUILDMETA_PATH}" <<META
 build_id=${DAEMON_BUILD_ID}
 build_id_source=${BUILD_ID_SOURCE}
 build_dirty=${BUILD_DIRTY}
-EOF
-echo "Wrote sidecar: ${DAEMON_BUILDMETA_PATH}"
+META
 
 echo "--- Building powergrid-helper ---"
 "${GO_BIN_RESOLVED}" build -o "${BUILD_OUTPUT_DIR}/powergrid-helper" "${HELPER_SOURCE_DIR}"
 
 echo "✅ Go binaries built successfully."
-
-# If invoked from Xcode, copy runtime artifacts into app Resources.
-if [ -n "${SRCROOT:-}" ] && [ -n "${TARGET_BUILD_DIR:-}" ] && [ -n "${UNLOCALIZED_RESOURCES_FOLDER_PATH:-}" ]; then
-    DEST_DIR="${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}"
-    mkdir -p "${DEST_DIR}"
-
-    cp "${BUILD_OUTPUT_DIR}/powergrid-daemon" "${DEST_DIR}/powergrid-daemon"
-    cp "${BUILD_OUTPUT_DIR}/powergrid-helper" "${DEST_DIR}/powergrid-helper"
-    cp "${BUILD_OUTPUT_DIR}/powergrid-daemon.buildid" "${DEST_DIR}/powergrid-daemon.buildid"
-    cp "${PROJECT_ROOT}/install/com.neutronstar.powergrid.daemon.plist" "${DEST_DIR}/com.neutronstar.powergrid.daemon.plist"
-
-    echo "✅ Copied daemon/helper/buildid/plist to app Resources: ${DEST_DIR}"
-fi

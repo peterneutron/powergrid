@@ -29,6 +29,8 @@ const (
 	defaultChargeLimit = 80
 	logSubsystem       = "com.neutronstar.powergrid.daemon"
 	opTimeout          = 5 * time.Second
+	apiMajor           = uint32(1)
+	apiMinor           = uint32(0)
 )
 
 var logger = oslogger.NewLogger(logSubsystem, "Daemon")
@@ -140,6 +142,12 @@ func (s *Daemon) GetDaemonInfo(_ context.Context, _ *rpc.Empty) (*rpc.DaemonInfo
 		MagsafeLedSupported: s.ledSupported,
 		BuildIdSource:       s.buildIDSource,
 		BuildDirty:          s.buildDirty,
+		ApiMajor:            apiMajor,
+		ApiMinor:            apiMinor,
+		Capabilities: []string{
+			"apply-mutation",
+			"daemon-info",
+		},
 	}, nil
 }
 

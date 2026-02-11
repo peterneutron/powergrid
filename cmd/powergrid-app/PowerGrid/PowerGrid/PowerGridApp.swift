@@ -58,6 +58,9 @@ struct MenuBarLabelView: View {
             case .upgradeAvailable:
                 Text("PG")
                 Image(systemName: "arrow.triangle.2.circlepath")
+            case .incompatibleDaemon:
+                Text("PG")
+                Image(systemName: "exclamationmark.triangle.fill")
                 
             case .installed:
                 switch client.connectionState {
@@ -145,6 +148,8 @@ struct AppMenuView: View {
                 
             case .notInstalled, .failed, .upgradeAvailable:
                 InstallationView(client: client)
+            case .incompatibleDaemon:
+                InstallationView(client: client)
                 
             case .installed:
                 if client.connectionState == .connected, let status = client.status {
@@ -173,14 +178,19 @@ struct InstallationView: View {
     @ObservedObject var client: DaemonClient
     
     var body: some View {
+        let isUpgradeLikeState: Bool = {
+            if client.installerState == .upgradeAvailable { return true }
+            if case .incompatibleDaemon = client.installerState { return true }
+            return false
+        }()
         VStack(spacing: 12) {
-            Text(client.installerState == .upgradeAvailable ? "PowerGrid Daemon Upgrade Available" : "PowerGrid Daemon Required")
+            Text(isUpgradeLikeState ? "PowerGrid Daemon Upgrade Required" : "PowerGrid Daemon Required")
                 .font(.title2).bold()
             
-            Text(client.installerState == .upgradeAvailable
+            Text(isUpgradeLikeState
                  ? (client.embeddedDaemonBuildID?.hasSuffix("-dirty") == true
                     ? "Dev build detected (dirty). You can upgrade now or skip to use the installed daemon."
-                    : "A newer daemon is bundled with this app. Upgrade to keep features in sync.")
+                    : "An updated compatible daemon is required. Upgrade to keep features in sync.")
                  : "To manage your Mac's charging, PowerGrid needs to install a small helper daemon that runs in the background as root.")
                 .font(.callout)
             
@@ -189,8 +199,13 @@ struct InstallationView: View {
                     .foregroundColor(.red)
                     .font(.caption)
             }
+            if case .incompatibleDaemon(let reason) = client.installerState {
+                Text("Incompatible daemon: \(reason)")
+                    .foregroundColor(.red)
+                    .font(.caption)
+            }
             
-            Button(client.installerState == .upgradeAvailable ? "Upgrade Daemon" : "Install Daemon") {
+            Button(isUpgradeLikeState ? "Upgrade Daemon" : "Install Daemon") {
                 Task {
                     await client.installDaemon()
                 }

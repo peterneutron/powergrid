@@ -215,7 +215,8 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = ED18CDAF48960650EABDFC9D /* Build configuration list for PBXNativeTarget "PowerGrid" */;
 			buildPhases = (
-				77E2D92582FB827A7AB52DF0 /* Generate Daemon */,
+				A70510C2A5D2359EC1402839 /* Generate Go Artifacts */,
+				BD0C825FED2B74CA51729273 /* Stage Go Artifacts */,
 				7DDD7E9311F1A309EEA54758 /* Sources */,
 				B2B56A177938F20818D17549 /* Resources */,
 				6DD7BF36E9DE98666471D0ED /* Frameworks */,
@@ -319,7 +320,34 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
-		77E2D92582FB827A7AB52DF0 /* Generate Daemon */ = {
+		A70510C2A5D2359EC1402839 /* Generate Go Artifacts */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"${SRCROOT}/../../../cmd/powergrid-daemon/main.go",
+				"${SRCROOT}/../../../cmd/powergrid-helper/main.go",
+				"${SRCROOT}/../../../go.mod",
+				"${SRCROOT}/../../../go.sum",
+				"${SRCROOT}/../../../scripts/build-go.sh",
+			);
+			name = "Generate Go Artifacts";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/powergrid-go/powergrid-daemon",
+				"$(DERIVED_FILE_DIR)/powergrid-go/powergrid-helper",
+				"$(DERIVED_FILE_DIR)/powergrid-go/powergrid-daemon.buildid",
+				"$(DERIVED_FILE_DIR)/powergrid-go/powergrid-daemon.buildmeta",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/zsh;
+			shellScript = "\"${SRCROOT}/../../../scripts/build-go.sh\"\n";
+		};
+		BD0C825FED2B74CA51729273 /* Stage Go Artifacts */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
@@ -328,15 +356,23 @@
 			inputFileListPaths = (
 			);
 			inputPaths = (
+				"$(DERIVED_FILE_DIR)/powergrid-go/powergrid-daemon",
+				"$(DERIVED_FILE_DIR)/powergrid-go/powergrid-helper",
+				"$(DERIVED_FILE_DIR)/powergrid-go/powergrid-daemon.buildid",
+				"${SRCROOT}/../../../install/com.neutronstar.powergrid.daemon.plist",
 			);
-			name = "Generate Daemon";
+			name = "Stage Go Artifacts";
 			outputFileListPaths = (
 			);
 			outputPaths = (
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/powergrid-daemon",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/powergrid-helper",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/powergrid-daemon.buildid",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/com.neutronstar.powergrid.daemon.plist",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/zsh;
-			shellScript = "\"${SRCROOT}/../../../scripts/build-go.sh\"\n";
+			shellScript = "set -euo pipefail\nDEST=\"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}\"\nmkdir -p \"${DEST}\"\ncp \"${DERIVED_FILE_DIR}/powergrid-go/powergrid-daemon\" \"${DEST}/powergrid-daemon\"\ncp \"${DERIVED_FILE_DIR}/powergrid-go/powergrid-helper\" \"${DEST}/powergrid-helper\"\ncp \"${DERIVED_FILE_DIR}/powergrid-go/powergrid-daemon.buildid\" \"${DEST}/powergrid-daemon.buildid\"\ncp \"${SRCROOT}/../../../install/com.neutronstar.powergrid.daemon.plist\" \"${DEST}/com.neutronstar.powergrid.daemon.plist\"\n";
 			showEnvVarsInLog = 0;
 		};
 /* End PBXShellScriptBuildPhase section */
