@@ -47,7 +47,6 @@ targets:
         excludes:
           - Info.plist
     resources:
-      - path: cmd/powergrid-app/PowerGrid/AppIcon.icon
     configFiles:
       Debug: cmd/powergrid-app/PowerGrid/Config/Base.xcconfig
       Release: cmd/powergrid-app/PowerGrid/Config/Base.xcconfig
