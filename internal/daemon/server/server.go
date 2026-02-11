@@ -52,6 +52,8 @@ type Daemon struct {
 	ledSupported                   bool
 	lastLEDState                   powerkit.MagsafeLEDState
 	buildID                        string
+	buildIDSource                  string
+	buildDirty                     bool
 	batteryUpdateCh                chan *powerkit.SystemInfo
 }
 
@@ -136,6 +138,8 @@ func (s *Daemon) GetDaemonInfo(_ context.Context, _ *rpc.Empty) (*rpc.DaemonInfo
 		BuildId:             s.buildID,
 		AuthMode:            ipc.AuthMode,
 		MagsafeLedSupported: s.ledSupported,
+		BuildIdSource:       s.buildIDSource,
+		BuildDirty:          s.buildDirty,
 	}, nil
 }
 
@@ -528,6 +532,9 @@ func (s *Daemon) enterNoUser() {
 	s.mu.Unlock()
 
 	logger.Default("Entering NoUser state: clearing assertions, enabling adapter, applying system/effective limit")
+	if err := ipc.SetSocketGroupAccess(socketPath, 0); err != nil {
+		logger.Error("Failed to reset socket group access in NoUser state: %v", err)
+	}
 	// Safety actions
 	powerkit.AllowAllSleep()
 	if err := callWithTimeout(opTimeout, func() error {
@@ -563,6 +570,13 @@ func (s *Daemon) enterConsoleUser(u *consoleuser.ConsoleUser) {
 	s.mu.Unlock()
 
 	logger.Default("Entering ConsoleUser state (%s): clearing assertions, enabling adapter, applying effective limit", u.Username)
+	if u.GID != 0 {
+		if err := ipc.SetSocketGroupAccess(socketPath, u.GID); err != nil {
+			logger.Error("Failed to grant socket group access to %s (gid=%d): %v", u.Username, u.GID, err)
+		}
+	} else {
+		logger.Info("Console user gid unavailable; socket group left unchanged.")
+	}
 	powerkit.AllowAllSleep()
 	if err := callWithTimeout(opTimeout, func() error {
 		return powerkit.SetAdapterState(powerkit.AdapterActionOn)
@@ -593,7 +607,7 @@ func (s *Daemon) handleSleep() {
 	}
 }
 
-func Run(buildID string) error {
+func Run(buildID string, buildIDSource string, buildDirty bool) error {
 	logger.Default("Starting PowerGrid Daemon...")
 	if os.Geteuid() != 0 {
 		return fmt.Errorf("powergrid daemon must be run as root")
@@ -607,7 +621,16 @@ func Run(buildID string) error {
 		return fmt.Errorf("failed to listen on socket: %w", err)
 	}
 
-	server := &Daemon{currentLimit: defaultChargeLimit, buildID: buildID, batteryUpdateCh: make(chan *powerkit.SystemInfo, 64)}
+	if buildIDSource == "" {
+		buildIDSource = "unknown"
+	}
+	server := &Daemon{
+		currentLimit:    defaultChargeLimit,
+		buildID:         buildID,
+		buildIDSource:   buildIDSource,
+		buildDirty:      buildDirty,
+		batteryUpdateCh: make(chan *powerkit.SystemInfo, 64),
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	grpcServer := grpc.NewServer(

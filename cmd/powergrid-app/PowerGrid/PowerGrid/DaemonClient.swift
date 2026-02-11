@@ -19,6 +19,13 @@ enum ForceDischargeMode: String, Equatable {
     case auto
 }
 
+enum BuildClassification {
+    case clean
+    case dirty
+    case fallback
+    case unknown
+}
+
 struct UserIntent: Equatable {
     var chargeLimit: Int = 100
     var preferredChargeLimit: Int = 80
@@ -84,6 +91,8 @@ struct UserIntent: Equatable {
         @Published private(set) var installedDaemonBuildID: String?
         @Published private(set) var daemonAuthMode: String?
         @Published private(set) var daemonMagsafeLedSupported: Bool = false
+        @Published private(set) var daemonBuildIDSource: String?
+        @Published private(set) var daemonBuildDirty: Bool = false
         private var skipUpgradeThisSession = false
         
         init() {
@@ -162,24 +171,24 @@ struct UserIntent: Equatable {
                         let ver = try await client.getVersion(Rpc_Empty())
                         self.installedDaemonBuildID = ver.buildID
                         await refreshDaemonInfo(client)
+                        self.applyUpgradePolicy()
                     } catch {
                         // Older daemon without GetVersion RPC: treat as upgrade available
                         if let rpcError = error as? GRPCCore.RPCError, rpcError.code == .unimplemented {
                             self.installedDaemonBuildID = nil
+                            self.daemonBuildIDSource = nil
+                            self.daemonBuildDirty = false
                             if self.embeddedDaemonBuildID != nil {
                                 self.installerState = .upgradeAvailable
                             }
                         } else {
                             // Leave as is; we won't force upgrade on other errors
                             self.installedDaemonBuildID = nil
+                            self.daemonBuildIDSource = nil
+                            self.daemonBuildDirty = false
                         }
                     }
-                    // If embedded build is a dev/dirty build, prompt upgrade regardless, unless skipped
-                    if let local = self.embeddedDaemonBuildID, local.hasSuffix("-dirty"), !self.skipUpgradeThisSession {
-                        self.installerState = .upgradeAvailable
-                    } else if let local = self.embeddedDaemonBuildID, let remote = self.installedDaemonBuildID, local != remote, !self.skipUpgradeThisSession {
-                        self.installerState = .upgradeAvailable
-                    }
+                    self.applyUpgradePolicy()
                 }
 
                 let response = try await client.getStatus(Rpc_Empty())
@@ -302,10 +311,57 @@ struct UserIntent: Equatable {
                 self.installedDaemonBuildID = info.buildID
                 self.daemonAuthMode = info.authMode
                 self.daemonMagsafeLedSupported = info.magsafeLedSupported
+                self.daemonBuildIDSource = info.buildIDSource.isEmpty ? nil : info.buildIDSource
+                self.daemonBuildDirty = info.buildDirty
             } catch {
                 if let rpcError = error as? GRPCCore.RPCError, rpcError.code == .unimplemented {
                     self.daemonAuthMode = nil
+                    self.daemonBuildIDSource = nil
+                    self.daemonBuildDirty = false
                 }
+            }
+        }
+
+        private func classifyEmbeddedBuild() -> BuildClassification {
+            guard let id = embeddedDaemonBuildID, !id.isEmpty else {
+                return .unknown
+            }
+            if id.hasSuffix("-dirty") { return .dirty }
+            if id.hasSuffix("-fallback") { return .fallback }
+            return .clean
+        }
+
+        private func classifyInstalledBuild() -> BuildClassification {
+            guard let id = installedDaemonBuildID, !id.isEmpty else {
+                return .unknown
+            }
+            if daemonBuildDirty || id.hasSuffix("-dirty") { return .dirty }
+            if daemonBuildIDSource == "fallback" || id.hasSuffix("-fallback") { return .fallback }
+            return .clean
+        }
+
+        private func applyUpgradePolicy() {
+            if skipUpgradeThisSession {
+                return
+            }
+
+            let embeddedClass = classifyEmbeddedBuild()
+            let installedClass = classifyInstalledBuild()
+
+            if embeddedClass == .dirty {
+                installerState = .upgradeAvailable
+                return
+            }
+
+            if embeddedClass == .clean, installedClass == .clean,
+               let local = embeddedDaemonBuildID, let remote = installedDaemonBuildID, local != remote {
+                installerState = .upgradeAvailable
+                return
+            }
+
+            if embeddedClass == .fallback || installedClass == .fallback {
+                // Fallback IDs are not strict upgrade blockers; keep current state.
+                return
             }
         }
         
@@ -415,18 +471,25 @@ struct UserIntent: Equatable {
                 await computeEmbeddedBuildID()
             }
             guard let client = self.client else { return }
-            do {
-                let ver = try await client.getVersion(Rpc_Empty())
-                self.installedDaemonBuildID = ver.buildID
-                await refreshDaemonInfo(client)
-                if let local = self.embeddedDaemonBuildID, local == ver.buildID {
-                    self.installerState = .installed
-                } else {
-                    self.installerState = .upgradeAvailable
+            let maxAttempts = 5
+            for attempt in 1...maxAttempts {
+                do {
+                    let ver = try await client.getVersion(Rpc_Empty())
+                    self.installedDaemonBuildID = ver.buildID
+                    await refreshDaemonInfo(client)
+                    self.applyUpgradePolicy()
+                    if self.installerState != .upgradeAvailable {
+                        self.installerState = .installed
+                    }
+                    return
+                } catch {
+                    if attempt == maxAttempts {
+                        print("Post-install GetVersion failed after \(maxAttempts) attempts: \(error)")
+                        return
+                    }
+                    let delayNanos = UInt64(250_000_000 * attempt)
+                    try? await Task.sleep(nanoseconds: delayNanos)
                 }
-            } catch {
-                // If version RPC still fails, leave IDs as-is; user can try again later
-                print("Post-install GetVersion failed: \(error)")
             }
         }
 

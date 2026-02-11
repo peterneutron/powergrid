@@ -7,42 +7,92 @@ set -e
 
 echo "--- Building Go Binaries ---"
 
-# =================================================================
-# 1. ENVIRONMENT & PATH SETUP
-# =================================================================
-if [ -n "$SRCROOT" ]; then
-    echo "🔨 Xcode environment detected. Setting up Homebrew and Go…"
+resolve_go() {
+    # Highest priority: explicit override.
+    if [ -n "${GO_BIN:-}" ]; then
+        if [ -x "${GO_BIN}" ]; then
+            echo "${GO_BIN}"
+            return 0
+        fi
+        echo "❌ ERROR: GO_BIN is set but not executable: ${GO_BIN}" >&2
+        exit 1
+    fi
 
-    #
-    # ——————— Homebrew Environment Setup ———————
-    #
-    echo "--- Setting up Homebrew Environment ---"
-    if [ -x /opt/homebrew/bin/brew ]; then
-        HB_PREFIX=/opt/homebrew
-    elif [ -x /usr/local/bin/brew ]; then
-        HB_PREFIX=/usr/local
+    # Standard PATH.
+    if command -v go >/dev/null 2>&1; then
+        command -v go
+        return 0
+    fi
+
+    # Common non-Homebrew locations.
+    for candidate in \
+        "${HOME}/.nix-profile/bin/go" \
+        "${HOME}/go/bin/go" \
+        "${HOME}/.asdf/shims/go" \
+        "${HOME}/.local/bin/go"
+    do
+        if [ -x "${candidate}" ]; then
+            echo "${candidate}"
+            return 0
+        fi
+    done
+
+    cat >&2 <<'ERR'
+❌ ERROR: Could not locate a Go toolchain.
+Tried:
+  - GO_BIN override
+  - PATH lookup (command -v go)
+  - Common locations:
+      $HOME/.nix-profile/bin/go
+      $HOME/go/bin/go
+      $HOME/.asdf/shims/go
+      $HOME/.local/bin/go
+
+If this is an Xcode build, remember Xcode uses a minimal shell environment.
+Set GO_BIN to an absolute path in your scheme/build environment, for example:
+  GO_BIN=/Users/<you>/.nix-profile/bin/go
+ERR
+    exit 1
+}
+
+compute_build_id_fallback() {
+    # Deterministic fallback for source snapshots without git metadata.
+    local digest_input
+    digest_input="$(
+        find "${DAEMON_SOURCE_DIR}" -type f -print | sort | while read -r f; do
+            printf '%s\n' "${f#${PROJECT_ROOT}/}"
+            shasum -a 256 "$f" | awk '{print $1}'
+        done
+    )"
+    if command -v shasum >/dev/null 2>&1; then
+        printf '%s' "${digest_input}" | shasum -a 256 | awk '{print substr($1,1,12)}'
+    elif command -v md5 >/dev/null 2>&1; then
+        printf '%s' "${digest_input}" | md5 | awk '{print substr($NF,1,12)}'
     else
-        echo "❌ ERROR: Homebrew not found." >&2
-        exit 1
+        # Last resort: stable string length checksum.
+        printf '%s' "${digest_input}" | cksum | awk '{print substr($1,1,12)}'
     fi
+}
 
-    eval "$(${HB_PREFIX}/bin/brew shellenv)"
-
-    if ! command -v go &> /dev/null; then
-        echo "❌ ERROR: 'go' not found. Please run 'brew install go'." >&2
-        exit 1
-    fi
-    echo "✅ Homebrew environment configured. Using 'go' from: $(command -v go)"
-
+# =================================================================
+# 1. ENVIRONMENT & ROOT RESOLUTION
+# =================================================================
+if [ -n "${PROJECT_ROOT:-}" ]; then
+    echo "Using PROJECT_ROOT override: ${PROJECT_ROOT}"
+elif [ -n "${SRCROOT:-}" ]; then
+    echo "🔨 Xcode environment detected."
     PROJECT_ROOT="${SRCROOT}/../../.."
-    echo "Using SRCROOT: $SRCROOT (Project Root: $PROJECT_ROOT)"
+    echo "Using SRCROOT: ${SRCROOT} (Project Root: ${PROJECT_ROOT})"
 else
-    echo "🖥 Manual execution detected. Skipping Homebrew setup."
-
+    echo "🖥 Manual execution detected."
     SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
     PROJECT_ROOT="${SCRIPT_DIR}/.."
-    echo "Calculated Project Root: $PROJECT_ROOT"
+    echo "Calculated Project Root: ${PROJECT_ROOT}"
 fi
+
+GO_BIN_RESOLVED="$(resolve_go)"
+echo "Using go binary: ${GO_BIN_RESOLVED}"
+"${GO_BIN_RESOLVED}" version
 
 # =================================================================
 # 2. DEFINE PATHS (Now that the environment is set)
@@ -50,6 +100,7 @@ fi
 BUILD_OUTPUT_DIR="${PROJECT_ROOT}/build-go"
 DAEMON_SOURCE_DIR="${PROJECT_ROOT}/cmd/powergrid-daemon"
 HELPER_SOURCE_DIR="${PROJECT_ROOT}/cmd/powergrid-helper"
+DAEMON_BUILDMETA_PATH="${BUILD_OUTPUT_DIR}/powergrid-daemon.buildmeta"
 
 # =================================================================
 # 3. BUILDING
@@ -57,32 +108,70 @@ HELPER_SOURCE_DIR="${PROJECT_ROOT}/cmd/powergrid-helper"
 echo "--- Starting Go Compilation ---"
 mkdir -p "${BUILD_OUTPUT_DIR}"
 
-# Derive daemon BuildID from git tree for cmd/powergrid-daemon, with repository-wide dirty flag
-echo "--- Computing daemon BuildID (git) ---"
-if command -v git >/dev/null 2>&1; then
+# Derive daemon BuildID from override, git, or deterministic fallback.
+echo "--- Computing daemon BuildID ---"
+BUILD_ID_SOURCE="${DAEMON_BUILD_SOURCE:-}"
+BUILD_DIRTY="false"
+DAEMON_BUILD_ID="${DAEMON_BUILD_ID:-}"
+
+if [ -n "${DAEMON_BUILD_ID}" ]; then
+    if [ -z "${BUILD_ID_SOURCE}" ]; then
+        BUILD_ID_SOURCE="override"
+    fi
+elif command -v git >/dev/null 2>&1 && [ -d "${PROJECT_ROOT}/.git" ]; then
     DAEMON_BUILD_ID=$(git -C "${PROJECT_ROOT}" rev-parse --short=12 HEAD:cmd/powergrid-daemon || true)
-    # Mark as dirty if repository has any changes (whole tree), using porcelain to avoid non-zero exits with set -e
     DIRTY_SUFFIX=""
     STATUS=$(git -C "${PROJECT_ROOT}" status --porcelain || true)
-    if [ -n "$STATUS" ]; then DIRTY_SUFFIX="-dirty"; fi
+    if [ -n "${STATUS}" ]; then
+        DIRTY_SUFFIX="-dirty"
+        BUILD_DIRTY="true"
+    fi
     DAEMON_BUILD_ID="${DAEMON_BUILD_ID}${DIRTY_SUFFIX}"
+    if [ -n "${DAEMON_BUILD_ID}" ]; then
+        if [ -z "${BUILD_ID_SOURCE}" ]; then
+            BUILD_ID_SOURCE="git"
+        fi
+    fi
 fi
+
 if [ -z "${DAEMON_BUILD_ID}" ]; then
-    echo "❌ ERROR: Unable to compute daemon BuildID from git. Ensure this is a git checkout." >&2
+    DAEMON_BUILD_ID="$(compute_build_id_fallback)-fallback"
+    if [ -z "${BUILD_ID_SOURCE}" ]; then
+        BUILD_ID_SOURCE="fallback"
+    fi
+    echo "⚠️ WARNING: git metadata unavailable; using fallback BuildID."
+fi
+
+if [ -z "${DAEMON_BUILD_ID}" ]; then
+    echo "❌ ERROR: Unable to compute daemon BuildID." >&2
     exit 1
 fi
-echo "Daemon BuildID: ${DAEMON_BUILD_ID}"
+
+if [[ "${DAEMON_BUILD_ID}" == *"-dirty" ]]; then
+    BUILD_DIRTY="true"
+fi
+if [[ "${DAEMON_BUILD_ID}" == *"-fallback" && -z "${DAEMON_BUILD_SOURCE:-}" ]]; then
+    BUILD_ID_SOURCE="fallback"
+fi
+
+echo "Daemon BuildID: ${DAEMON_BUILD_ID} (source=${BUILD_ID_SOURCE}, dirty=${BUILD_DIRTY})"
 
 # Build steps (stamp BuildID via ldflags)
 echo "--- Building powergrid-daemon ---"
-go build -ldflags "-X 'main.BuildID=${DAEMON_BUILD_ID}'" -o "${BUILD_OUTPUT_DIR}/powergrid-daemon" "${DAEMON_SOURCE_DIR}"
+"${GO_BIN_RESOLVED}" build -ldflags "-X 'main.BuildID=${DAEMON_BUILD_ID}' -X 'main.BuildIDSource=${BUILD_ID_SOURCE}' -X 'main.BuildDirty=${BUILD_DIRTY}'" -o "${BUILD_OUTPUT_DIR}/powergrid-daemon" "${DAEMON_SOURCE_DIR}"
 
 # Write sidecar BuildID file for the app bundle to read at runtime
 echo "${DAEMON_BUILD_ID}" > "${BUILD_OUTPUT_DIR}/powergrid-daemon.buildid"
 echo "Wrote sidecar: ${BUILD_OUTPUT_DIR}/powergrid-daemon.buildid"
+cat > "${DAEMON_BUILDMETA_PATH}" <<EOF
+build_id=${DAEMON_BUILD_ID}
+build_id_source=${BUILD_ID_SOURCE}
+build_dirty=${BUILD_DIRTY}
+EOF
+echo "Wrote sidecar: ${DAEMON_BUILDMETA_PATH}"
 
 echo "--- Building powergrid-helper ---"
-go build -o "${BUILD_OUTPUT_DIR}/powergrid-helper" "${HELPER_SOURCE_DIR}"
+"${GO_BIN_RESOLVED}" build -o "${BUILD_OUTPUT_DIR}/powergrid-helper" "${HELPER_SOURCE_DIR}"
 
 echo "✅ Go binaries built successfully."
 

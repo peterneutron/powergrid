@@ -1,0 +1,4 @@
+// Copy to Signing.local.xcconfig for local developer overrides.
+// POWERGRID_DEVELOPMENT_TEAM = ABCDE12345
+// CODE_SIGN_IDENTITY = Apple Development
+POWERGRID_DEVELOPMENT_TEAM =

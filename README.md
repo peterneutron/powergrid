@@ -30,6 +30,10 @@ PowerGrid is still experimental. Interfaces and internals can change.
   - active console user
 - Mutating requests use one typed RPC envelope:
   - `ApplyMutation(MutationRequest)`
+- Daemon diagnostics expose auth/build metadata through `GetDaemonInfo`:
+  - `auth_mode`
+  - `build_id_source` (`git`, `override`, `fallback`, `unknown`)
+  - `build_dirty`
 
 ## Runtime Behavior
 - Event-driven first: battery/sleep/wake events come from `powerkit-go` streaming.
@@ -63,6 +67,7 @@ Preferences are persisted as plist files.
 ## Build Prerequisites
 - macOS (Apple Silicon target)
 - Xcode + Command Line Tools
+- XcodeGen (`xcodegen`)
 - Go toolchain
 - Protobuf toolchain available in `PATH`:
   - `protoc`
@@ -75,6 +80,11 @@ Preferences are persisted as plist files.
 
 ## Build and Verify
 From `powergrid/`:
+
+- Generate Xcode project from source-of-truth spec:
+  - `make xcodegen`
+- Verify generated project is up to date:
+  - `make xcodegen-check`
 
 - Generate RPC code:
   - `make proto`
@@ -90,10 +100,28 @@ From `powergrid/`:
   - `make verify`
 - Build unsigned app:
   - `make build`
+- Build dev-signed app (free cert supported):
+  - `make devsigned`
 
 ## Notes on Generated Code
 Generated protobuf/gRPC code is produced into `generated/` and copied into the Swift app RPC folder by `make proto`.
 Do not hand-edit generated files.
+
+## Signing Notes
+- Deterministic signing resolution is handled by `scripts/resolve-signing.sh`.
+- Supported env overrides:
+  - `SIGNING_IDENTITY`
+  - `DEVELOPMENT_TEAM`
+- Local signing overrides can be kept in:
+  - `cmd/powergrid-app/PowerGrid/Config/Signing.local.xcconfig`
+  - see `cmd/powergrid-app/PowerGrid/Config/Signing.local.xcconfig.example`
+
+## Upgrade Detection Notes
+- The app compares embedded daemon BuildID with installed daemon BuildID.
+- Policy:
+  - clean mismatch: upgrade prompt
+  - dirty embedded build: upgrade prompt (session-skippable)
+  - fallback BuildIDs: soft warning path, no hard upgrade gate by default
 
 ## Logging
 Daemon logs use macOS unified logging subsystem `com.neutronstar.powergrid.daemon`.
