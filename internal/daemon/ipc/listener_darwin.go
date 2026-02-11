@@ -161,3 +161,15 @@ func Listen(path string) (net.Listener, error) {
 
 	return &secureUnixListener{base: unixLis}, nil
 }
+
+// SetSocketGroupAccess updates the socket group while preserving root ownership and mode.
+// This allows the active console user's primary group to open the socket.
+func SetSocketGroupAccess(path string, gid uint32) error {
+	if err := os.Chown(path, 0, int(gid)); err != nil {
+		return err
+	}
+	if err := os.Chmod(path, SocketMode); err != nil {
+		return err
+	}
+	return nil
+}
