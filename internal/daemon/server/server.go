@@ -28,6 +28,7 @@ const (
 	socketPath         = "/var/run/powergrid.sock"
 	defaultChargeLimit = 80
 	logSubsystem       = "com.neutronstar.powergrid.daemon"
+	opTimeout          = 5 * time.Second
 )
 
 var logger = oslogger.NewLogger(logSubsystem, "Daemon")
@@ -190,12 +191,16 @@ func (s *Daemon) applyPowerFeature(feature rpc.PowerFeature, enable bool) error 
 		}
 	case rpc.PowerFeature_FORCE_DISCHARGE:
 		if enable {
-			if err := powerkit.SetAdapterState(powerkit.AdapterActionOff); err != nil {
+			if err := callWithTimeout(opTimeout, func() error {
+				return powerkit.SetAdapterState(powerkit.AdapterActionOff)
+			}); err != nil {
 				logger.Error("Failed to force discharge (adapter off): %v", err)
 				return status.Errorf(codes.Internal, "failed to set force discharge: %v", err)
 			}
 		} else {
-			if err := powerkit.SetAdapterState(powerkit.AdapterActionOn); err != nil {
+			if err := callWithTimeout(opTimeout, func() error {
+				return powerkit.SetAdapterState(powerkit.AdapterActionOn)
+			}); err != nil {
 				logger.Error("Failed to re-enable adapter: %v", err)
 				return status.Errorf(codes.Internal, "failed to re-enable adapter: %v", err)
 			}
@@ -213,7 +218,9 @@ func (s *Daemon) applyPowerFeature(feature rpc.PowerFeature, enable bool) error 
 		s.mu.Unlock()
 		// On disable, hand control back to system immediately
 		if !enable && s.ledSupported {
-			if err := powerkit.SetMagsafeLEDState(powerkit.LEDSystem); err != nil {
+			if err := callWithTimeout(opTimeout, func() error {
+				return powerkit.SetMagsafeLEDState(powerkit.LEDSystem)
+			}); err != nil {
 				logger.Error("Failed to return MagSafe LED to system control: %v", err)
 				return status.Errorf(codes.Internal, "failed to set magsafe LED system mode: %v", err)
 			} else {
@@ -229,7 +236,9 @@ func (s *Daemon) applyPowerFeature(feature rpc.PowerFeature, enable bool) error 
 		s.mu.Unlock()
 	case rpc.PowerFeature_LOW_POWER_MODE:
 		// Use powerkit-go to set Low Power Mode (requires root; daemon runs as root)
-		if err := powerkit.SetLowPowerMode(enable); err != nil {
+		if err := callWithTimeout(opTimeout, func() error {
+			return powerkit.SetLowPowerMode(enable)
+		}); err != nil {
 			logger.Error("Failed to set Low Power Mode: %v", err)
 			return status.Errorf(codes.Internal, "failed to set low power mode: %v", err)
 		} else {
@@ -320,7 +329,7 @@ func (s *Daemon) startBatteryCoalescer() {
 func (s *Daemon) runChargingLogicLocked(info *powerkit.SystemInfo) {
 	var err error
 	if info == nil {
-		info, err = powerkit.GetSystemInfo()
+		info, err = getSystemInfoWithTimeout(opTimeout)
 		if err != nil {
 			logger.Error("Failed to get system info: %v", err)
 			return
@@ -352,14 +361,18 @@ func (s *Daemon) runChargingLogicLocked(info *powerkit.SystemInfo) {
 	switch engine.DecideCharging(charge, limit, isSMCChargingEnabled) {
 	case engine.ChargingDisable:
 		logger.Default("Charge %d%% >= Limit %d%%. Disabling charging.", charge, limit)
-		if err := powerkit.SetChargingState(powerkit.ChargingActionOff); err != nil {
+		if err := callWithTimeout(opTimeout, func() error {
+			return powerkit.SetChargingState(powerkit.ChargingActionOff)
+		}); err != nil {
 			logger.Error("Failed to disable charging: %v", err)
 		} else {
 			logger.Default("Successfully disabled charging.")
 		}
 	case engine.ChargingEnable:
 		logger.Default("Charge %d%% < Limit %d%%. Re-enabling charging.", charge, limit)
-		if err := powerkit.SetChargingState(powerkit.ChargingActionOn); err != nil {
+		if err := callWithTimeout(opTimeout, func() error {
+			return powerkit.SetChargingState(powerkit.ChargingActionOn)
+		}); err != nil {
 			logger.Error("Failed to enable charging: %v", err)
 		} else {
 			logger.Default("Successfully enabled charging.")
@@ -480,11 +493,15 @@ func (s *Daemon) enterNoUser() {
 	logger.Default("Entering NoUser state: clearing assertions, enabling adapter, applying system/effective limit")
 	// Safety actions
 	powerkit.AllowAllSleep()
-	if err := powerkit.SetAdapterState(powerkit.AdapterActionOn); err != nil {
+	if err := callWithTimeout(opTimeout, func() error {
+		return powerkit.SetAdapterState(powerkit.AdapterActionOn)
+	}); err != nil {
 		logger.Error("Failed to ensure adapter ON in NoUser: %v", err)
 	}
 	if s.ledSupported {
-		if err := powerkit.SetMagsafeLEDState(powerkit.LEDSystem); err != nil {
+		if err := callWithTimeout(opTimeout, func() error {
+			return powerkit.SetMagsafeLEDState(powerkit.LEDSystem)
+		}); err != nil {
 			logger.Info("Could not set MagSafe LED to system in NoUser: %v", err)
 		} else {
 			s.lastLEDState = powerkit.LEDSystem
@@ -510,7 +527,9 @@ func (s *Daemon) enterConsoleUser(u *consoleuser.ConsoleUser) {
 
 	logger.Default("Entering ConsoleUser state (%s): clearing assertions, enabling adapter, applying effective limit", u.Username)
 	powerkit.AllowAllSleep()
-	if err := powerkit.SetAdapterState(powerkit.AdapterActionOn); err != nil {
+	if err := callWithTimeout(opTimeout, func() error {
+		return powerkit.SetAdapterState(powerkit.AdapterActionOn)
+	}); err != nil {
 		logger.Error("Failed to ensure adapter ON on user switch: %v", err)
 	}
 
@@ -528,7 +547,9 @@ func (s *Daemon) handleSleep() {
 		return
 	}
 	logger.Default("System is going to sleep. Proactively disabling charging.")
-	if err := powerkit.SetChargingState(powerkit.ChargingActionOff); err != nil {
+	if err := callWithTimeout(opTimeout, func() error {
+		return powerkit.SetChargingState(powerkit.ChargingActionOff)
+	}); err != nil {
 		logger.Error("Failed to disable charging for sleep: %v", err)
 	} else {
 		logger.Default("Successfully disabled charging for sleep.")
@@ -591,7 +612,9 @@ func Run(buildID string) error {
 			server.mu.Unlock()
 			logger.Default("MagSafe LED control supported on this hardware.")
 			// Ensure safe default on boot
-			if err := powerkit.SetMagsafeLEDState(powerkit.LEDSystem); err != nil {
+			if err := callWithTimeout(opTimeout, func() error {
+				return powerkit.SetMagsafeLEDState(powerkit.LEDSystem)
+			}); err != nil {
 				logger.Info("Could not set MagSafe LED to system on startup: %v", err)
 			} else {
 				server.lastLEDState = powerkit.LEDSystem
@@ -633,7 +656,9 @@ func (s *Daemon) applyMagsafeLED(info *powerkit.SystemInfo) {
 	if target == s.lastLEDState {
 		return
 	}
-	if err := powerkit.SetMagsafeLEDState(target); err != nil {
+	if err := callWithTimeout(opTimeout, func() error {
+		return powerkit.SetMagsafeLEDState(target)
+	}); err != nil {
 		logger.Error("Failed to set MagSafe LED: %v", err)
 		return
 	}
@@ -649,5 +674,38 @@ func (s *Daemon) applyMagsafeLED(info *powerkit.SystemInfo) {
 		logger.Info("MagSafe LED -> Error (Perm Slow)")
 	case powerkit.LEDSystem:
 		logger.Info("MagSafe LED -> System")
+	}
+}
+
+func callWithTimeout(timeout time.Duration, fn func() error) error {
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- fn()
+	}()
+
+	select {
+	case err := <-errCh:
+		return err
+	case <-time.After(timeout):
+		return fmt.Errorf("operation timed out after %s", timeout)
+	}
+}
+
+func getSystemInfoWithTimeout(timeout time.Duration) (*powerkit.SystemInfo, error) {
+	type result struct {
+		info *powerkit.SystemInfo
+		err  error
+	}
+	resCh := make(chan result, 1)
+	go func() {
+		info, err := powerkit.GetSystemInfo()
+		resCh <- result{info: info, err: err}
+	}()
+
+	select {
+	case res := <-resCh:
+		return res.info, res.err
+	case <-time.After(timeout):
+		return nil, fmt.Errorf("get system info timed out after %s", timeout)
 	}
 }
