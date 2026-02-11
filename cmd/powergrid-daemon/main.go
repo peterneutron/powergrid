@@ -1,22 +1,22 @@
 package main
 
 import (
-    "context"
-    "net"
-    "os"
-    "os/signal"
-    "sync"
-    "syscall"
-    "time"
+	"context"
+	"os"
+	"os/signal"
+	"sync"
+	"syscall"
+	"time"
 
-    "google.golang.org/grpc"
+	"google.golang.org/grpc"
 
-    "github.com/peterneutron/powerkit-go/pkg/powerkit"
+	"github.com/peterneutron/powerkit-go/pkg/powerkit"
 
-    rpc "powergrid/generated/go"
-    cfg "powergrid/internal/config"
-    consoleuser "powergrid/internal/consoleuser"
-    oslogger "powergrid/internal/oslogger"
+	rpc "powergrid/generated/go"
+	cfg "powergrid/internal/config"
+	consoleuser "powergrid/internal/consoleuser"
+	"powergrid/internal/daemon/ipc"
+	oslogger "powergrid/internal/oslogger"
 )
 
 const (
@@ -89,33 +89,33 @@ func (s *powerGridServer) GetStatus(_ context.Context, _ *rpc.Empty) (*rpc.Statu
 		resp.SmcChargingEnabled = s.lastSMCStatus.State.IsChargingEnabled
 		resp.SmcAdapterEnabled = s.lastSMCStatus.State.IsAdapterEnabled
 	}
-    resp.MagsafeLedControlActive = s.wantMagsafeLED
-    resp.MagsafeLedSupported = s.ledSupported
-    // Low Power Mode via powerkit-go (cached internally by the library)
-    if enabled, available, err := powerkit.GetLowPowerModeEnabled(); err == nil && available {
-        resp.LowPowerModeEnabled = enabled
-    }
-    resp.DisableChargingBeforeSleepActive = s.wantDisableChargingBeforeSleep
-    // Battery details (best-effort; fields may not be available on all hardware)
-    if s.lastIOKitStatus != nil {
-        b := s.lastIOKitStatus.Battery
-        resp.BatterySerialNumber = b.SerialNumber
-        resp.BatteryDesignCapacity = int32(b.DesignCapacity)
-        resp.BatteryMaxCapacity = int32(b.MaxCapacity)
-        resp.BatteryNominalCapacity = int32(b.NominalCapacity)
-        resp.BatteryVoltage = float32(b.Voltage)
-        resp.BatteryAmperage = float32(b.Amperage)
-        // Temperature (°C) if available
-        resp.BatteryTemperatureC = float32(b.Temperature)
-        if len(b.IndividualCellVoltages) > 0 {
-            cells := make([]int32, len(b.IndividualCellVoltages))
-            for i, mv := range b.IndividualCellVoltages {
-                cells[i] = int32(mv)
-            }
-            resp.BatteryIndividualCellMillivolts = cells
-        }
-    }
-    return resp, nil
+	resp.MagsafeLedControlActive = s.wantMagsafeLED
+	resp.MagsafeLedSupported = s.ledSupported
+	// Low Power Mode via powerkit-go (cached internally by the library)
+	if enabled, available, err := powerkit.GetLowPowerModeEnabled(); err == nil && available {
+		resp.LowPowerModeEnabled = enabled
+	}
+	resp.DisableChargingBeforeSleepActive = s.wantDisableChargingBeforeSleep
+	// Battery details (best-effort; fields may not be available on all hardware)
+	if s.lastIOKitStatus != nil {
+		b := s.lastIOKitStatus.Battery
+		resp.BatterySerialNumber = b.SerialNumber
+		resp.BatteryDesignCapacity = int32(b.DesignCapacity)
+		resp.BatteryMaxCapacity = int32(b.MaxCapacity)
+		resp.BatteryNominalCapacity = int32(b.NominalCapacity)
+		resp.BatteryVoltage = float32(b.Voltage)
+		resp.BatteryAmperage = float32(b.Amperage)
+		// Temperature (°C) if available
+		resp.BatteryTemperatureC = float32(b.Temperature)
+		if len(b.IndividualCellVoltages) > 0 {
+			cells := make([]int32, len(b.IndividualCellVoltages))
+			for i, mv := range b.IndividualCellVoltages {
+				cells[i] = int32(mv)
+			}
+			resp.BatteryIndividualCellMillivolts = cells
+		}
+	}
+	return resp, nil
 }
 
 func (s *powerGridServer) GetVersion(_ context.Context, _ *rpc.Empty) (*rpc.VersionResponse, error) {
@@ -212,13 +212,13 @@ func (s *powerGridServer) SetPowerFeature(_ context.Context, req *rpc.SetPowerFe
 			_ = cfg.WriteUserDisableChargingBeforeSleep(s.currentConsoleUser.HomeDir, enable)
 		}
 		s.mu.Unlock()
-    case rpc.PowerFeature_LOW_POWER_MODE:
-        // Use powerkit-go to set Low Power Mode (requires root; daemon runs as root)
-        if err := powerkit.SetLowPowerMode(req.GetEnable()); err != nil {
-            logger.Error("Failed to set Low Power Mode: %v", err)
-        } else {
-            logger.Default("Set Low Power Mode to %v", req.GetEnable())
-        }
+	case rpc.PowerFeature_LOW_POWER_MODE:
+		// Use powerkit-go to set Low Power Mode (requires root; daemon runs as root)
+		if err := powerkit.SetLowPowerMode(req.GetEnable()); err != nil {
+			logger.Error("Failed to set Low Power Mode: %v", err)
+		} else {
+			logger.Default("Set Low Power Mode to %v", req.GetEnable())
+		}
 	}
 
 	s.mu.Lock()
@@ -296,40 +296,39 @@ func (s *powerGridServer) startEventStream() {
 	logger.Default("Daemon event stream started. Watching for all power events.")
 	for event := range eventChan {
 		switch event.Type {
-
 		case powerkit.EventTypeSystemWillSleep:
 			s.handleSleep()
 
-        case powerkit.EventTypeSystemDidWake:
-            logger.Default("System woke up. Re-evaluating state with backoff...")
+		case powerkit.EventTypeSystemDidWake:
+			logger.Default("System woke up. Re-evaluating state with backoff...")
 
-            go func() {
-                // Retry a few times with backoff to allow subsystems to stabilize
-                delays := []time.Duration{1 * time.Second, 2 * time.Second, 4 * time.Second}
-                for i, d := range delays {
-                    time.Sleep(d)
+			go func() {
+				// Retry a few times with backoff to allow subsystems to stabilize
+				delays := []time.Duration{1 * time.Second, 2 * time.Second, 4 * time.Second}
+				for i, d := range delays {
+					time.Sleep(d)
 
-                    s.mu.RLock()
-                    shouldPreventDisplaySleep := s.wantPreventDisplaySleep
-                    shouldPreventSystemSleep := s.wantPreventSystemSleep
-                    s.mu.RUnlock()
+					s.mu.RLock()
+					shouldPreventDisplaySleep := s.wantPreventDisplaySleep
+					shouldPreventSystemSleep := s.wantPreventSystemSleep
+					s.mu.RUnlock()
 
-                    if shouldPreventDisplaySleep {
-                        logger.Default("Re-applying 'Prevent Display Sleep' after wake (attempt %d).", i+1)
-                        if _, err := powerkit.CreateAssertion(powerkit.AssertionTypePreventDisplaySleep, "PowerGrid: Prevent Display Sleep"); err != nil {
-                            logger.Error("Failed to re-create display sleep assertion after wake: %v", err)
-                        }
-                    }
-                    if shouldPreventSystemSleep {
-                        logger.Default("Re-applying 'Prevent System Sleep' after wake (attempt %d).", i+1)
-                        if _, err := powerkit.CreateAssertion(powerkit.AssertionTypePreventSystemSleep, "PowerGrid: Prevent System Sleep"); err != nil {
-                            logger.Error("Failed to re-create system sleep assertion after wake: %v", err)
-                        }
-                    }
+					if shouldPreventDisplaySleep {
+						logger.Default("Re-applying 'Prevent Display Sleep' after wake (attempt %d).", i+1)
+						if _, err := powerkit.CreateAssertion(powerkit.AssertionTypePreventDisplaySleep, "PowerGrid: Prevent Display Sleep"); err != nil {
+							logger.Error("Failed to re-create display sleep assertion after wake: %v", err)
+						}
+					}
+					if shouldPreventSystemSleep {
+						logger.Default("Re-applying 'Prevent System Sleep' after wake (attempt %d).", i+1)
+						if _, err := powerkit.CreateAssertion(powerkit.AssertionTypePreventSystemSleep, "PowerGrid: Prevent System Sleep"); err != nil {
+							logger.Error("Failed to re-create system sleep assertion after wake: %v", err)
+						}
+					}
 
-                    s.runChargingLogic(nil)
-                }
-            }()
+					s.runChargingLogic(nil)
+				}
+			}()
 
 		case powerkit.EventTypeBatteryUpdate:
 			logger.Info("Received a battery status update, running charging logic.")
@@ -410,7 +409,7 @@ func (s *powerGridServer) enterNoUser() {
 		}
 	}
 
-systemLimit := cfg.ReadSystemChargeLimit()
+	systemLimit := cfg.ReadSystemChargeLimit()
 	effective := cfg.EffectiveChargeLimit(0, systemLimit, defaultChargeLimit)
 	s.mu.Lock()
 	s.currentLimit = int32(effective)
@@ -425,8 +424,8 @@ func (s *powerGridServer) enterConsoleUser(u *consoleuser.ConsoleUser) {
 	s.currentConsoleUser = u
 	s.wantPreventDisplaySleep = false
 	s.wantPreventSystemSleep = false
-    s.wantMagsafeLED = cfg.ReadUserMagsafeLED(u.HomeDir)
-    s.wantDisableChargingBeforeSleep = cfg.ReadUserDisableChargingBeforeSleep(u.HomeDir)
+	s.wantMagsafeLED = cfg.ReadUserMagsafeLED(u.HomeDir)
+	s.wantDisableChargingBeforeSleep = cfg.ReadUserDisableChargingBeforeSleep(u.HomeDir)
 	s.mu.Unlock()
 
 	logger.Default("Entering ConsoleUser state (%s): clearing assertions, enabling adapter, applying effective limit", u.Username)
@@ -435,8 +434,8 @@ func (s *powerGridServer) enterConsoleUser(u *consoleuser.ConsoleUser) {
 		logger.Error("Failed to ensure adapter ON on user switch: %v", err)
 	}
 
-systemLimit := cfg.ReadSystemChargeLimit()
-userLimit := cfg.ReadUserChargeLimit(u.HomeDir)
+	systemLimit := cfg.ReadSystemChargeLimit()
+	userLimit := cfg.ReadUserChargeLimit(u.HomeDir)
 	effective := cfg.EffectiveChargeLimit(userLimit, systemLimit, defaultChargeLimit)
 	s.mu.Lock()
 	s.currentLimit = int32(effective)
@@ -472,23 +471,23 @@ func main() {
 		logger.Error("Failed to ensure system config: %v", err)
 	}
 
-	if err := os.RemoveAll(socketPath); err != nil {
-		logger.Fault("FATAL: Failed to remove old socket: %v", err)
-		os.Exit(1)
-	}
-
-	lis, err := net.Listen("unix", socketPath)
+	lis, err := ipc.Listen(socketPath)
 	if err != nil {
 		logger.Fault("FATAL: Failed to listen on socket: %v", err)
 		os.Exit(1)
 	}
-	if err := os.Chmod(socketPath, 0777); err != nil {
-		logger.Fault("FATAL: Failed to set socket permissions:  %v", err)
-		os.Exit(1)
-	}
 
-	grpcServer := grpc.NewServer()
 	server := &powerGridServer{currentLimit: defaultChargeLimit}
+	grpcServer := grpc.NewServer(
+		grpc.UnaryInterceptor(ipc.AuthUnaryInterceptor(func() (uint32, bool) {
+			server.mu.RLock()
+			defer server.mu.RUnlock()
+			if server.currentConsoleUser == nil {
+				return 0, false
+			}
+			return server.currentConsoleUser.UID, true
+		})),
+	)
 	rpc.RegisterPowerGridServer(grpcServer, server)
 
 	server.startConsoleUserEventHandler()
@@ -535,9 +534,8 @@ func main() {
 
 	logger.Default("Shutting down PowerGrid Daemon...")
 	grpcServer.GracefulStop()
-	if err := os.RemoveAll(socketPath); err != nil {
+	if err := os.Remove(socketPath); err != nil && !os.IsNotExist(err) {
 		logger.Error("Failed to remove socket on shutdown: %v", err)
-
 	}
 }
 

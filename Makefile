@@ -18,7 +18,7 @@ PROTO_SCRIPT            ?= ./scripts/gen_proto.sh
 GENERATED_SWIFT_DIR     ?= ./generated/swift
 TARGET_SWIFT_DIR        ?= $(PROJECT_DIR)/$(APP_NAME)/internal/rpc
 
-.PHONY: all build devsigned archive export package proto clean release
+.PHONY: all build devsigned archive export package proto proto-check test vet lint verify clean release
 
 all: build
 release: build
@@ -128,3 +128,17 @@ clean:
 	@xcodebuild -project "$(PROJECT)" -scheme "$(SCHEME)" clean || true
 	@rm -rf "$(BUILD_DIR)" ./generated
 	@echo "✅ Cleaned build, generated, and rpc directories."
+
+test:
+	@go test ./...
+
+vet:
+	@go vet ./...
+
+lint:
+	@golangci-lint run
+
+proto-check: proto
+	@git diff --exit-code -- generated/go cmd/powergrid-app/PowerGrid/PowerGrid/internal/rpc
+
+verify: test vet
