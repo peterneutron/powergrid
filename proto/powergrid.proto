@@ -8,6 +8,7 @@ service PowerGrid {
   rpc SetChargeLimit(SetChargeLimitRequest) returns (Empty);
   rpc SetPowerFeature(SetPowerFeatureRequest) returns (Empty);
   rpc GetVersion(Empty) returns (VersionResponse);
+  rpc GetDaemonInfo(Empty) returns (DaemonInfoResponse);
 }
 
 message Empty {}
@@ -69,4 +70,10 @@ message SetPowerFeatureRequest {
 
 message VersionResponse {
   string build_id = 1; // Daemon build identifier (e.g., SHA-256 of executable)
+}
+
+message DaemonInfoResponse {
+  string build_id = 1;
+  string auth_mode = 2;
+  bool   magsafe_led_supported = 3;
 }

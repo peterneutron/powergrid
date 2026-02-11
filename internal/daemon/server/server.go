@@ -123,6 +123,17 @@ func (s *Daemon) GetVersion(_ context.Context, _ *rpc.Empty) (*rpc.VersionRespon
 	return &rpc.VersionResponse{BuildId: s.buildID}, nil
 }
 
+func (s *Daemon) GetDaemonInfo(_ context.Context, _ *rpc.Empty) (*rpc.DaemonInfoResponse, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	return &rpc.DaemonInfoResponse{
+		BuildId:             s.buildID,
+		AuthMode:            ipc.AuthMode,
+		MagsafeLedSupported: s.ledSupported,
+	}, nil
+}
+
 func (s *Daemon) SetChargeLimit(_ context.Context, req *rpc.SetChargeLimitRequest) (*rpc.Empty, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

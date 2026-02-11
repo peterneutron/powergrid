@@ -82,6 +82,8 @@ struct UserIntent: Equatable {
         private var autoArmed = false // Auto is engaged (Auto selected AND FD active)
         @Published private(set) var embeddedDaemonBuildID: String?
         @Published private(set) var installedDaemonBuildID: String?
+        @Published private(set) var daemonAuthMode: String?
+        @Published private(set) var daemonMagsafeLedSupported: Bool = false
         private var skipUpgradeThisSession = false
         
         init() {
@@ -159,6 +161,7 @@ struct UserIntent: Equatable {
                     do {
                         let ver = try await client.getVersion(Rpc_Empty())
                         self.installedDaemonBuildID = ver.buildID
+                        await refreshDaemonInfo(client)
                     } catch {
                         // Older daemon without GetVersion RPC: treat as upgrade available
                         if let rpcError = error as? GRPCCore.RPCError, rpcError.code == .unimplemented {
@@ -292,6 +295,19 @@ struct UserIntent: Equatable {
                 print("Embedded daemon BuildID file not found in bundle resources.")
             }
         }
+
+        private func refreshDaemonInfo(_ client: Rpc_PowerGrid.Client<HTTP2ClientTransport.Posix>) async {
+            do {
+                let info = try await client.getDaemonInfo(Rpc_Empty())
+                self.installedDaemonBuildID = info.buildID
+                self.daemonAuthMode = info.authMode
+                self.daemonMagsafeLedSupported = info.magsafeLedSupported
+            } catch {
+                if let rpcError = error as? GRPCCore.RPCError, rpcError.code == .unimplemented {
+                    self.daemonAuthMode = nil
+                }
+            }
+        }
         
         func setLimit(_ newLimit: Int) async {
             log("Setting charge limit to \(newLimit)%")
@@ -380,6 +396,7 @@ struct UserIntent: Equatable {
             do {
                 let ver = try await client.getVersion(Rpc_Empty())
                 self.installedDaemonBuildID = ver.buildID
+                await refreshDaemonInfo(client)
                 if let local = self.embeddedDaemonBuildID, local == ver.buildID {
                     self.installerState = .installed
                 } else {

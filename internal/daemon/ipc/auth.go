@@ -54,7 +54,7 @@ func isAuthorized(uid uint32, fullMethod string, activeUID ActiveUIDProvider) bo
 	}
 
 	switch fullMethod {
-	case "/rpc.PowerGrid/GetStatus", "/rpc.PowerGrid/GetVersion", "/rpc.PowerGrid/SetChargeLimit", "/rpc.PowerGrid/SetPowerFeature":
+	case "/rpc.PowerGrid/GetStatus", "/rpc.PowerGrid/GetVersion", "/rpc.PowerGrid/GetDaemonInfo", "/rpc.PowerGrid/SetChargeLimit", "/rpc.PowerGrid/SetPowerFeature":
 		return uid == current
 	default:
 		return false
