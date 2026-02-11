@@ -32,7 +32,7 @@ PowerGrid is still experimental. Interfaces and internals can change.
   - `ApplyMutation(MutationRequest)`
 - Daemon diagnostics expose auth/build metadata through `GetDaemonInfo`:
   - `auth_mode`
-  - `build_id_source` (`git`, `override`, `fallback`, `unknown`)
+  - `build_id_source` (`git`, `override`, `fallback`, `xcode-derived`, `unknown`)
   - `build_dirty`
 
 ## Runtime Behavior
@@ -116,12 +116,37 @@ Do not hand-edit generated files.
   - `cmd/powergrid-app/PowerGrid/Config/Signing.local.xcconfig`
   - see `cmd/powergrid-app/PowerGrid/Config/Signing.local.xcconfig.example`
 
-## Upgrade Detection Notes
-- The app compares embedded daemon BuildID with installed daemon BuildID.
-- Policy:
-  - clean mismatch: upgrade prompt
-  - dirty embedded build: upgrade prompt (session-skippable)
-  - fallback BuildIDs: soft warning path, no hard upgrade gate by default
+## Compatibility Policy
+PowerGrid uses a two-layer contract:
+- Layer 1 (primary): protocol compatibility via daemon-reported API semver (`api_major`, `api_minor`) from `GetDaemonInfo`.
+- Layer 2 (secondary): BuildID + sidecar metadata for upgrade UX and diagnostics.
+
+Semver gate rules:
+- `api_major` mismatch: hard incompatible (app blocks mutating actions and shows install/upgrade path).
+- `api_minor` below app minimum: incompatible/degraded path per app policy.
+- `api_minor` at or above minimum (same major): compatible.
+
+BuildID semantics (non-blocking for compatibility):
+- clean BuildID mismatch: show "upgrade available".
+- dirty/fallback/xcode-derived BuildIDs: warning/diagnostic path only.
+- missing embedded BuildID sidecar: warn once; continue using semver gate.
+
+## Xcode Sandbox Notes
+- Script sandboxing remains enabled.
+- `scripts/build-go.sh` is sandbox-safe by design in Xcode mode:
+  - no `git` usage in Xcode mode,
+  - deterministic `xcode-derived` BuildID,
+  - outputs written to `${DERIVED_FILE_DIR}/powergrid-go`.
+- Artifact staging into app resources is handled by Xcode script phases with declared `inputFiles`/`outputFiles` from `project.yml`.
+
+Quick troubleshooting checklist:
+- Run `make xcodegen` after changing `project.yml`.
+- Ensure app bundle resources contain:
+  - `powergrid-daemon`
+  - `powergrid-helper`
+  - `powergrid-daemon.buildid`
+  - `com.neutronstar.powergrid.daemon.plist`
+- If upgrade prompts look wrong, check daemon info first (`api_major`/`api_minor`) before BuildID comparisons.
 
 ## Logging
 Daemon logs use macOS unified logging subsystem `com.neutronstar.powergrid.daemon`.
