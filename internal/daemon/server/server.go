@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/peterneutron/powerkit-go/pkg/powerkit"
 
@@ -135,13 +137,12 @@ func (s *Daemon) GetDaemonInfo(_ context.Context, _ *rpc.Empty) (*rpc.DaemonInfo
 	}, nil
 }
 
-func (s *Daemon) applySetChargeLimit(newLimit int32) {
+func (s *Daemon) applySetChargeLimit(newLimit int32) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	if newLimit < 60 || newLimit > 100 {
-		logger.Default("Ignoring invalid charge limit: %d", newLimit)
-		return
+		return status.Errorf(codes.InvalidArgument, "charge limit out of range: %d", newLimit)
 	}
 
 	if s.currentConsoleUser == nil {
@@ -158,9 +159,10 @@ func (s *Daemon) applySetChargeLimit(newLimit int32) {
 	}
 
 	s.runChargingLogicLocked(nil)
+	return nil
 }
 
-func (s *Daemon) applyPowerFeature(feature rpc.PowerFeature, enable bool) {
+func (s *Daemon) applyPowerFeature(feature rpc.PowerFeature, enable bool) error {
 	switch feature {
 	case rpc.PowerFeature_PREVENT_DISPLAY_SLEEP:
 		s.mu.Lock()
@@ -169,6 +171,7 @@ func (s *Daemon) applyPowerFeature(feature rpc.PowerFeature, enable bool) {
 		if enable {
 			if _, err := powerkit.CreateAssertion(powerkit.AssertionTypePreventDisplaySleep, "PowerGrid: Prevent Display Sleep"); err != nil {
 				logger.Error("Failed to create display sleep assertion: %v", err)
+				return status.Errorf(codes.Internal, "failed to create display sleep assertion: %v", err)
 			}
 		} else {
 			powerkit.ReleaseAssertion(powerkit.AssertionTypePreventDisplaySleep)
@@ -180,6 +183,7 @@ func (s *Daemon) applyPowerFeature(feature rpc.PowerFeature, enable bool) {
 		if enable {
 			if _, err := powerkit.CreateAssertion(powerkit.AssertionTypePreventSystemSleep, "PowerGrid: Prevent System Sleep"); err != nil {
 				logger.Error("Failed to create system sleep assertion: %v", err)
+				return status.Errorf(codes.Internal, "failed to create system sleep assertion: %v", err)
 			}
 		} else {
 			powerkit.ReleaseAssertion(powerkit.AssertionTypePreventSystemSleep)
@@ -188,10 +192,12 @@ func (s *Daemon) applyPowerFeature(feature rpc.PowerFeature, enable bool) {
 		if enable {
 			if err := powerkit.SetAdapterState(powerkit.AdapterActionOff); err != nil {
 				logger.Error("Failed to force discharge (adapter off): %v", err)
+				return status.Errorf(codes.Internal, "failed to set force discharge: %v", err)
 			}
 		} else {
 			if err := powerkit.SetAdapterState(powerkit.AdapterActionOn); err != nil {
 				logger.Error("Failed to re-enable adapter: %v", err)
+				return status.Errorf(codes.Internal, "failed to re-enable adapter: %v", err)
 			}
 		}
 	case rpc.PowerFeature_CONTROL_MAGSAFE_LED:
@@ -209,6 +215,7 @@ func (s *Daemon) applyPowerFeature(feature rpc.PowerFeature, enable bool) {
 		if !enable && s.ledSupported {
 			if err := powerkit.SetMagsafeLEDState(powerkit.LEDSystem); err != nil {
 				logger.Error("Failed to return MagSafe LED to system control: %v", err)
+				return status.Errorf(codes.Internal, "failed to set magsafe LED system mode: %v", err)
 			} else {
 				s.lastLEDState = powerkit.LEDSystem
 			}
@@ -224,24 +231,32 @@ func (s *Daemon) applyPowerFeature(feature rpc.PowerFeature, enable bool) {
 		// Use powerkit-go to set Low Power Mode (requires root; daemon runs as root)
 		if err := powerkit.SetLowPowerMode(enable); err != nil {
 			logger.Error("Failed to set Low Power Mode: %v", err)
+			return status.Errorf(codes.Internal, "failed to set low power mode: %v", err)
 		} else {
 			logger.Default("Set Low Power Mode to %v", enable)
 		}
+	default:
+		return status.Errorf(codes.InvalidArgument, "unsupported power feature: %v", feature)
 	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.runChargingLogicLocked(nil)
+	return nil
 }
 
 func (s *Daemon) ApplyMutation(_ context.Context, req *rpc.MutationRequest) (*rpc.Empty, error) {
 	switch req.GetOperation() {
 	case rpc.MutationOperation_SET_CHARGE_LIMIT:
-		s.applySetChargeLimit(req.GetLimit())
+		if err := s.applySetChargeLimit(req.GetLimit()); err != nil {
+			return nil, err
+		}
 	case rpc.MutationOperation_SET_POWER_FEATURE:
-		s.applyPowerFeature(req.GetFeature(), req.GetEnable())
+		if err := s.applyPowerFeature(req.GetFeature(), req.GetEnable()); err != nil {
+			return nil, err
+		}
 	default:
-		logger.Default("Ignoring unsupported mutation operation: %v", req.GetOperation())
+		return nil, status.Errorf(codes.InvalidArgument, "unsupported mutation operation: %v", req.GetOperation())
 	}
 	return &rpc.Empty{}, nil
 }
