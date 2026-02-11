@@ -37,6 +37,7 @@ type Daemon struct {
 	rpc.UnimplementedPowerGridServer
 
 	mu                             sync.RWMutex
+	wg                             sync.WaitGroup
 	currentLimit                   int32
 	lastIOKitStatus                *powerkit.IOKitData
 	lastSMCStatus                  *powerkit.SMCData
@@ -289,12 +290,14 @@ func (s *Daemon) enqueueBatteryUpdate(info *powerkit.SystemInfo) {
 	}
 }
 
-func (s *Daemon) startBatteryCoalescer() {
+func (s *Daemon) startBatteryCoalescer(ctx context.Context) {
 	if s.batteryUpdateCh == nil {
 		s.batteryUpdateCh = make(chan *powerkit.SystemInfo, 64)
 	}
 
+	s.wg.Add(1)
 	go func() {
+		defer s.wg.Done()
 		const debounce = 350 * time.Millisecond
 
 		var latest *powerkit.SystemInfo
@@ -306,6 +309,11 @@ func (s *Daemon) startBatteryCoalescer() {
 
 		for {
 			select {
+			case <-ctx.Done():
+				if timerActive && !timer.Stop() {
+					<-timer.C
+				}
+				return
 			case info := <-s.batteryUpdateCh:
 				latest = info
 				if timerActive && !timer.Stop() {
@@ -383,72 +391,101 @@ func (s *Daemon) runChargingLogicLocked(info *powerkit.SystemInfo) {
 	s.applyMagsafeLED(info)
 }
 
-func (s *Daemon) startEventStream() {
+func (s *Daemon) startEventStream(ctx context.Context) {
 	eventChan, err := powerkit.StreamSystemEvents()
 	if err != nil {
 		logger.Error("FATAL: Failed to start powerkit event stream: %v", err)
 	}
 
 	logger.Default("Daemon event stream started. Watching for all power events.")
-	for event := range eventChan {
-		switch event.Type {
-		case powerkit.EventTypeSystemWillSleep:
-			s.handleSleep()
-
-		case powerkit.EventTypeSystemDidWake:
-			logger.Default("System woke up. Re-evaluating state with backoff...")
-
-			go func() {
-				// Retry a few times with backoff to allow subsystems to stabilize
-				delays := []time.Duration{1 * time.Second, 2 * time.Second, 4 * time.Second}
-				for i, d := range delays {
-					time.Sleep(d)
-
-					s.mu.RLock()
-					shouldPreventDisplaySleep := s.wantPreventDisplaySleep
-					shouldPreventSystemSleep := s.wantPreventSystemSleep
-					s.mu.RUnlock()
-
-					if shouldPreventDisplaySleep {
-						logger.Default("Re-applying 'Prevent Display Sleep' after wake (attempt %d).", i+1)
-						if _, err := powerkit.CreateAssertion(powerkit.AssertionTypePreventDisplaySleep, "PowerGrid: Prevent Display Sleep"); err != nil {
-							logger.Error("Failed to re-create display sleep assertion after wake: %v", err)
-						}
-					}
-					if shouldPreventSystemSleep {
-						logger.Default("Re-applying 'Prevent System Sleep' after wake (attempt %d).", i+1)
-						if _, err := powerkit.CreateAssertion(powerkit.AssertionTypePreventSystemSleep, "PowerGrid: Prevent System Sleep"); err != nil {
-							logger.Error("Failed to re-create system sleep assertion after wake: %v", err)
-						}
-					}
-
-					s.runChargingLogic(nil)
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case event, ok := <-eventChan:
+				if !ok {
+					return
 				}
-			}()
+				switch event.Type {
+				case powerkit.EventTypeSystemWillSleep:
+					s.handleSleep()
+				case powerkit.EventTypeSystemDidWake:
+					logger.Default("System woke up. Re-evaluating state with backoff...")
+					s.wg.Add(1)
+					go func() {
+						defer s.wg.Done()
+						// Retry a few times with backoff to allow subsystems to stabilize
+						delays := []time.Duration{1 * time.Second, 2 * time.Second, 4 * time.Second}
+						for i, d := range delays {
+							select {
+							case <-ctx.Done():
+								return
+							case <-time.After(d):
+							}
 
-		case powerkit.EventTypeBatteryUpdate:
-			logger.Info("Received a battery status update, running charging logic.")
-			s.enqueueBatteryUpdate(event.Info)
-		default:
-			if event.Info != nil {
-				s.runChargingLogic(event.Info)
-			} else {
-				s.runChargingLogic(nil)
+							s.mu.RLock()
+							shouldPreventDisplaySleep := s.wantPreventDisplaySleep
+							shouldPreventSystemSleep := s.wantPreventSystemSleep
+							s.mu.RUnlock()
+
+							if shouldPreventDisplaySleep {
+								logger.Default("Re-applying 'Prevent Display Sleep' after wake (attempt %d).", i+1)
+								if _, err := powerkit.CreateAssertion(powerkit.AssertionTypePreventDisplaySleep, "PowerGrid: Prevent Display Sleep"); err != nil {
+									logger.Error("Failed to re-create display sleep assertion after wake: %v", err)
+								}
+							}
+							if shouldPreventSystemSleep {
+								logger.Default("Re-applying 'Prevent System Sleep' after wake (attempt %d).", i+1)
+								if _, err := powerkit.CreateAssertion(powerkit.AssertionTypePreventSystemSleep, "PowerGrid: Prevent System Sleep"); err != nil {
+									logger.Error("Failed to re-create system sleep assertion after wake: %v", err)
+								}
+							}
+
+							s.runChargingLogic(nil)
+						}
+					}()
+				case powerkit.EventTypeBatteryUpdate:
+					logger.Info("Received a battery status update, running charging logic.")
+					s.enqueueBatteryUpdate(event.Info)
+				default:
+					if event.Info != nil {
+						s.runChargingLogic(event.Info)
+					} else {
+						s.runChargingLogic(nil)
+					}
+				}
 			}
 		}
-	}
+	}()
 }
 
-func (s *Daemon) startConsoleUserEventHandler() {
+func (s *Daemon) startConsoleUserEventHandler(ctx context.Context) {
 	userEvents := consoleuser.Watch()
 
 	s.handleConsoleUserChange(nil)
 
+	s.wg.Add(1)
 	go func() {
-		for range userEvents {
-			logger.Default("Received console user change event. Re-evaluating in 1 second...")
-			time.Sleep(1 * time.Second)
-			s.handleConsoleUserChange(nil)
+		defer s.wg.Done()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case _, ok := <-userEvents:
+				if !ok {
+					return
+				}
+				logger.Default("Received console user change event. Re-evaluating in 1 second...")
+				select {
+				case <-ctx.Done():
+					return
+				case <-time.After(1 * time.Second):
+				}
+				s.handleConsoleUserChange(nil)
+			}
 		}
 	}()
 }
@@ -571,6 +608,8 @@ func Run(buildID string) error {
 	}
 
 	server := &Daemon{currentLimit: defaultChargeLimit, buildID: buildID, batteryUpdateCh: make(chan *powerkit.SystemInfo, 64)}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	grpcServer := grpc.NewServer(
 		grpc.UnaryInterceptor(ipc.AuthUnaryInterceptor(func() (uint32, bool) {
 			server.mu.RLock()
@@ -583,16 +622,23 @@ func Run(buildID string) error {
 	)
 	rpc.RegisterPowerGridServer(grpcServer, server)
 
-	server.startConsoleUserEventHandler()
-	server.startBatteryCoalescer()
+	server.startConsoleUserEventHandler(ctx)
+	server.startBatteryCoalescer(ctx)
 
-	go server.startEventStream()
+	server.startEventStream(ctx)
 
+	server.wg.Add(1)
 	go func() {
+		defer server.wg.Done()
 		ticker := time.NewTicker(60 * time.Second)
 		defer ticker.Stop()
-		for range ticker.C {
-			server.runChargingLogic(nil)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				server.runChargingLogic(nil)
+			}
 		}
 	}()
 
@@ -629,7 +675,18 @@ func Run(buildID string) error {
 	<-quit
 
 	logger.Default("Shutting down PowerGrid Daemon...")
+	cancel()
 	grpcServer.GracefulStop()
+	done := make(chan struct{})
+	go func() {
+		server.wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		logger.Info("Timed out waiting for background goroutines to stop.")
+	}
 	if err := os.Remove(socketPath); err != nil && !os.IsNotExist(err) {
 		logger.Error("Failed to remove socket on shutdown: %v", err)
 	}
