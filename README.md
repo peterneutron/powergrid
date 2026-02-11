@@ -21,6 +21,9 @@ PowerGrid is still experimental. Interfaces and internals can change.
 ## Security Model
 - Daemon runs as root.
 - IPC uses a UNIX socket at `/var/run/powergrid.sock` with restricted permissions (`0660`).
+- Socket ownership remains `root`, and socket group is updated at runtime:
+  - no active user: group reset to `root`
+  - active console user: group set to that user's primary GID (so the app can open the socket)
 - The daemon reads peer credentials and authorizes RPC calls by UID.
 - Allowed callers for read/mutation RPCs:
   - root
