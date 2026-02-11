@@ -5,8 +5,7 @@ option go_package = "powergrid/internal/rpc";
 
 service PowerGrid {
   rpc GetStatus(Empty) returns (StatusResponse);
-  rpc SetChargeLimit(SetChargeLimitRequest) returns (Empty);
-  rpc SetPowerFeature(SetPowerFeatureRequest) returns (Empty);
+  rpc ApplyMutation(MutationRequest) returns (Empty);
   rpc GetVersion(Empty) returns (VersionResponse);
   rpc GetDaemonInfo(Empty) returns (DaemonInfoResponse);
 }
@@ -66,6 +65,19 @@ enum PowerFeature {
 message SetPowerFeatureRequest {
   PowerFeature feature = 1;
   bool enable = 2;
+}
+
+enum MutationOperation {
+  MUTATION_OPERATION_UNSPECIFIED = 0;
+  SET_CHARGE_LIMIT = 1;
+  SET_POWER_FEATURE = 2;
+}
+
+message MutationRequest {
+  MutationOperation operation = 1;
+  int32 limit = 2;
+  PowerFeature feature = 3;
+  bool enable = 4;
 }
 
 message VersionResponse {

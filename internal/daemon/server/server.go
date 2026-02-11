@@ -134,14 +134,13 @@ func (s *Daemon) GetDaemonInfo(_ context.Context, _ *rpc.Empty) (*rpc.DaemonInfo
 	}, nil
 }
 
-func (s *Daemon) SetChargeLimit(_ context.Context, req *rpc.SetChargeLimitRequest) (*rpc.Empty, error) {
+func (s *Daemon) applySetChargeLimit(newLimit int32) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	newLimit := req.GetLimit()
 	if newLimit < 60 || newLimit > 100 {
 		logger.Default("Ignoring invalid charge limit: %d", newLimit)
-		return &rpc.Empty{}, nil
+		return
 	}
 
 	if s.currentConsoleUser == nil {
@@ -158,17 +157,15 @@ func (s *Daemon) SetChargeLimit(_ context.Context, req *rpc.SetChargeLimitReques
 	}
 
 	s.runChargingLogicLocked(nil)
-
-	return &rpc.Empty{}, nil
 }
 
-func (s *Daemon) SetPowerFeature(_ context.Context, req *rpc.SetPowerFeatureRequest) (*rpc.Empty, error) {
-	switch req.GetFeature() {
+func (s *Daemon) applyPowerFeature(feature rpc.PowerFeature, enable bool) {
+	switch feature {
 	case rpc.PowerFeature_PREVENT_DISPLAY_SLEEP:
 		s.mu.Lock()
-		s.wantPreventDisplaySleep = req.GetEnable()
+		s.wantPreventDisplaySleep = enable
 		s.mu.Unlock()
-		if req.GetEnable() {
+		if enable {
 			if _, err := powerkit.CreateAssertion(powerkit.AssertionTypePreventDisplaySleep, "PowerGrid: Prevent Display Sleep"); err != nil {
 				logger.Error("Failed to create display sleep assertion: %v", err)
 			}
@@ -177,9 +174,9 @@ func (s *Daemon) SetPowerFeature(_ context.Context, req *rpc.SetPowerFeatureRequ
 		}
 	case rpc.PowerFeature_PREVENT_SYSTEM_SLEEP:
 		s.mu.Lock()
-		s.wantPreventSystemSleep = req.GetEnable()
+		s.wantPreventSystemSleep = enable
 		s.mu.Unlock()
-		if req.GetEnable() {
+		if enable {
 			if _, err := powerkit.CreateAssertion(powerkit.AssertionTypePreventSystemSleep, "PowerGrid: Prevent System Sleep"); err != nil {
 				logger.Error("Failed to create system sleep assertion: %v", err)
 			}
@@ -187,7 +184,7 @@ func (s *Daemon) SetPowerFeature(_ context.Context, req *rpc.SetPowerFeatureRequ
 			powerkit.ReleaseAssertion(powerkit.AssertionTypePreventSystemSleep)
 		}
 	case rpc.PowerFeature_FORCE_DISCHARGE:
-		if req.GetEnable() {
+		if enable {
 			if err := powerkit.SetAdapterState(powerkit.AdapterActionOff); err != nil {
 				logger.Error("Failed to force discharge (adapter off): %v", err)
 			}
@@ -198,7 +195,6 @@ func (s *Daemon) SetPowerFeature(_ context.Context, req *rpc.SetPowerFeatureRequ
 		}
 	case rpc.PowerFeature_CONTROL_MAGSAFE_LED:
 		s.mu.Lock()
-		enable := req.GetEnable()
 		if !s.ledSupported && enable {
 			logger.Default("MagSafe LED control not supported on this hardware.")
 		} else {
@@ -218,7 +214,6 @@ func (s *Daemon) SetPowerFeature(_ context.Context, req *rpc.SetPowerFeatureRequ
 		}
 	case rpc.PowerFeature_DISABLE_CHARGING_BEFORE_SLEEP:
 		s.mu.Lock()
-		enable := req.GetEnable()
 		s.wantDisableChargingBeforeSleep = enable
 		if s.currentConsoleUser != nil {
 			_ = cfg.WriteUserDisableChargingBeforeSleep(s.currentConsoleUser.HomeDir, enable)
@@ -226,16 +221,27 @@ func (s *Daemon) SetPowerFeature(_ context.Context, req *rpc.SetPowerFeatureRequ
 		s.mu.Unlock()
 	case rpc.PowerFeature_LOW_POWER_MODE:
 		// Use powerkit-go to set Low Power Mode (requires root; daemon runs as root)
-		if err := powerkit.SetLowPowerMode(req.GetEnable()); err != nil {
+		if err := powerkit.SetLowPowerMode(enable); err != nil {
 			logger.Error("Failed to set Low Power Mode: %v", err)
 		} else {
-			logger.Default("Set Low Power Mode to %v", req.GetEnable())
+			logger.Default("Set Low Power Mode to %v", enable)
 		}
 	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.runChargingLogicLocked(nil)
+}
+
+func (s *Daemon) ApplyMutation(_ context.Context, req *rpc.MutationRequest) (*rpc.Empty, error) {
+	switch req.GetOperation() {
+	case rpc.MutationOperation_SET_CHARGE_LIMIT:
+		s.applySetChargeLimit(req.GetLimit())
+	case rpc.MutationOperation_SET_POWER_FEATURE:
+		s.applyPowerFeature(req.GetFeature(), req.GetEnable())
+	default:
+		logger.Default("Ignoring unsupported mutation operation: %v", req.GetOperation())
+	}
 	return &rpc.Empty{}, nil
 }
 
