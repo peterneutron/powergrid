@@ -9,6 +9,8 @@ require (
 	google.golang.org/protobuf v1.36.6
 )
 
+replace github.com/peterneutron/powerkit-go => ../powerkit-go
+
 require (
 	golang.org/x/net v0.40.0 // indirect
 	golang.org/x/text v0.25.0 // indirect
