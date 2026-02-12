@@ -46,6 +46,8 @@ message StatusResponse {
   float  battery_amperage = 31;           // A
   repeated int32 battery_individual_cell_millivolts = 32; // Per-cell voltage in mV
   float  battery_temperature_c = 33;      // °C
+  int32  battery_voltage_drift_mv = 34;   // Cell max-min drift in mV
+  string battery_balance_state = 35;      // balanced | slight_imbalance | high_imbalance | unknown
 }
 
 enum PowerFeature {

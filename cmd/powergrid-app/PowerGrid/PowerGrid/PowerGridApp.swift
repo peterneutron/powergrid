@@ -499,9 +499,21 @@ struct BatteryDetailsView: View {
                 }
                 GridRow {
                     Text("Drift:")
-                    let (label, color) = driftLabelAndColor(millivolts: status.batteryIndividualCellMillivolts)
-                    let mvOpt = driftMilliVolts(millivolts: status.batteryIndividualCellMillivolts)
-                    Text(mvOpt == nil ? label : "\(label) (\(mvOpt!) mV)")
+                    let driftMv = Int(status.batteryVoltageDriftMv)
+                    let state = status.batteryBalanceState
+                    let (label, color): (String, Color) = {
+                        switch state {
+                        case "balanced":
+                            return ("Balanced", .green)
+                        case "slight_imbalance":
+                            return ("Slight", .yellow)
+                        case "high_imbalance":
+                            return ("High", .red)
+                        default:
+                            return ("—", .secondary)
+                        }
+                    }()
+                    Text(state == "unknown" ? label : "\(label) (\(driftMv) mV)")
                         .foregroundStyle(color)
                         .gridColumnAlignment(.leading)
                     Text("")
@@ -510,23 +522,6 @@ struct BatteryDetailsView: View {
             .padding(.top, 6)
         }
     }
-}
-
-private func driftLabelAndColor(millivolts: [Int32]) -> (String, Color) {
-    guard millivolts.count >= 2 else { return ("—", .secondary) }
-    let ints = millivolts.map { Int($0) }
-    guard let minV = ints.min(), let maxV = ints.max() else { return ("—", .secondary) }
-    let drift = maxV - minV // mV
-    if drift <= 10 { return ("Normal", .green) }
-    if drift <= 30 { return ("Slight", .yellow) }
-    return ("High", .red)
-}
-
-private func driftMilliVolts(millivolts: [Int32]) -> Int? {
-    guard millivolts.count >= 2 else { return nil }
-    let ints = millivolts.map { Int($0) }
-    guard let minV = ints.min(), let maxV = ints.max() else { return nil }
-    return maxV - minV
 }
 
 struct ControlsView: View {

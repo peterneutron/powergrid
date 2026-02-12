@@ -115,6 +115,8 @@ func (s *Daemon) GetStatus(_ context.Context, _ *rpc.Empty) (*rpc.StatusResponse
 		resp.BatteryNominalCapacity = int32(b.NominalCapacity)
 		resp.BatteryVoltage = float32(b.Voltage)
 		resp.BatteryAmperage = float32(b.Amperage)
+		resp.BatteryVoltageDriftMv = int32(s.lastIOKitStatus.Calculations.VoltageDriftMV)
+		resp.BatteryBalanceState = string(s.lastIOKitStatus.Calculations.BalanceState)
 		// Temperature (°C) if available
 		resp.BatteryTemperatureC = float32(b.Temperature)
 		if len(b.IndividualCellVoltages) > 0 {
