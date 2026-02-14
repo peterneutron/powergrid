@@ -41,6 +41,18 @@ jobs:
       - name: XcodeGen check
         run: make xcodegen-check
 
+      - name: Install SwiftLint
+        run: |
+          if command -v swiftlint >/dev/null 2>&1; then
+            swiftlint version
+          else
+            brew install swiftlint
+            swiftlint version
+          fi
+
+      - name: SwiftLint
+        run: make swiftlint
+
       - name: Swift tests
         run: |
           xcodebuild test \

@@ -20,7 +20,7 @@ SIGNING_RESOLVER_SCRIPT := ./scripts/resolve-signing.sh
 PROTO_SCRIPT            ?= ./scripts/gen_proto.sh
 TARGET_SWIFT_DIR        ?= $(PROJECT_DIR)/$(APP_NAME)/internal/rpc
 
-.PHONY: all build devsigned archive export package proto proto-check xcodegen xcodegen-check swift-test test vet lint verify clean release
+.PHONY: all build devsigned archive export package proto proto-check xcodegen xcodegen-check swift-test swiftlint test vet lint verify clean release
 
 all: build
 release: build
@@ -130,7 +130,14 @@ lint:
 proto-check:
 	@bash ./scripts/proto-check.sh
 
-verify: test vet lint proto-check xcodegen-check swift-test
+swiftlint:
+	@if ! command -v swiftlint >/dev/null 2>&1; then \
+	  echo "❌ swiftlint not found. Install SwiftLint or run in CI where it is provisioned."; \
+	  exit 1; \
+	fi
+	@swiftlint lint --config .swiftlint.yml --strict
+
+verify: test vet lint proto-check xcodegen-check swiftlint swift-test
 swift-test: xcodegen proto
 	@xcodebuild test \
 	  -project "$(PROJECT)" \
