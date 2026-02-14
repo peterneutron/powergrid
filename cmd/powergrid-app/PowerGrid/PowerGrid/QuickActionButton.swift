@@ -68,9 +68,9 @@ struct CircleToggleStyle: ButtonStyle {
 struct ActionState<Value: Equatable>: Equatable {
     var value: Value
     var imageName: String
-    var tint: Color? = nil
-    var help: String? = nil
-    var accessibilityLabel: String? = nil
+    var tint: Color?
+    var help: String?
+    var accessibilityLabel: String?
 }
 
 struct MultiStateActionButton<Value: Equatable>: View {
@@ -80,10 +80,10 @@ struct MultiStateActionButton<Value: Equatable>: View {
     var size: CGFloat = 48
     var enableHaptics: Bool = true
     var showsCaption: Bool = false
-    var isActiveProvider: ((Value) -> Bool)? = nil
-    var onChange: ((Value) -> Void)? = nil
+    var isActiveProvider: ((Value) -> Bool)?
+    var onChange: ((Value) -> Void)?
     // Optional: skip certain values when cycling (e.g., disable a state)
-    var shouldSkip: ((Value) -> Bool)? = nil
+    var shouldSkip: ((Value) -> Bool)?
 
     @State private var hovering = false
 
