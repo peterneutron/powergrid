@@ -229,7 +229,6 @@ struct InstallationView: View {
     }
 }
 
-
 struct MainControlsView: View {
     @ObservedObject var client: DaemonClient
     let status: Rpc_StatusResponse
@@ -631,8 +630,8 @@ struct QuickActionsView: View {
             MultiStateActionButton<ForceDischargeMode>(
                 title: "Force Discharge",
                 states: [
-                    ActionState(value: .off,  imageName: "bolt.fill",                 tint: .red, help: "Charge normally"),
-                    ActionState(value: .on,   imageName: "bolt.badge.xmark.fill",     tint: .red, help: "Force discharge"),
+                    ActionState(value: .off, imageName: "bolt.fill", tint: .red, help: "Charge normally"),
+                    ActionState(value: .on, imageName: "bolt.badge.xmark.fill", tint: .red, help: "Force discharge"),
                     ActionState(value: .auto, imageName: "bolt.badge.automatic.fill", tint: .red, help: "Auto: Disable at \(userLimit)%")
                 ],
                 selection: $client.userIntent.forceDischargeMode,
@@ -663,8 +662,8 @@ struct QuickActionsView: View {
             MultiStateActionButton<Bool>(
                 title: "Display Sleep",
                 states: [
-                    ActionState(value: false, imageName: "moon.fill",     tint: .green, help: "Allows display sleep"),
-                    ActionState(value: true,  imageName: "sun.max.fill",  tint: .green, help: "Prevents display sleep")
+                    ActionState(value: false, imageName: "moon.fill", tint: .green, help: "Allows display sleep"),
+                    ActionState(value: true, imageName: "sun.max.fill", tint: .green, help: "Prevents display sleep")
                 ],
                 selection: $client.userIntent.preventDisplaySleep,
                 size: 48,
@@ -708,9 +707,9 @@ struct QuickActionsView: View {
             MultiStateActionButton<MenuBarDisplayStyle>(
                 title: "Icons",
                 states: [
-                    ActionState(value: .iconAndText, imageName: "circle.grid.2x1.fill",          tint: .green,  help: "Menu bar (Icon + Text)"),
-                    ActionState(value: .iconOnly,    imageName: "circle.grid.2x1.left.filled",   tint: .yellow, help: "Menu bar (Icon Only)"),
-                    ActionState(value: .textOnly,    imageName: "circle.grid.2x1.right.filled",  tint: .red,    help: "Menu bar (Text Only)")
+                    ActionState(value: .iconAndText, imageName: "circle.grid.2x1.fill", tint: .green, help: "Menu bar (Icon + Text)"),
+                    ActionState(value: .iconOnly, imageName: "circle.grid.2x1.left.filled", tint: .yellow, help: "Menu bar (Icon Only)"),
+                    ActionState(value: .textOnly, imageName: "circle.grid.2x1.right.filled", tint: .red, help: "Menu bar (Text Only)")
                 ],
                 selection: $client.userIntent.menuBarDisplayStyle,
                 size: 48,
