@@ -36,6 +36,7 @@ settings:
     Debug:
       SWIFT_ACTIVE_COMPILATION_CONDITIONS: "DEBUG $(inherited)"
       SWIFT_OPTIMIZATION_LEVEL: -Onone
+      ENABLE_TESTABILITY: YES
     Release:
       SWIFT_COMPILATION_MODE: wholemodule
 
