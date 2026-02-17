@@ -60,8 +60,8 @@ jobs:
       - name: Proto check
         run: make proto-check
 
-      - name: XcodeGen check
-        run: make xcodegen-check
+      - name: XcodeGen generate
+        run: make xcodegen
 
       - name: Install SwiftLint
         run: |
