@@ -128,6 +128,7 @@ lint:
 	@golangci-lint run
 
 proto-check:
+	@bash $(PROTO_SCRIPT)
 	@bash ./scripts/proto-check.sh
 
 swiftlint:
