@@ -1,131 +1,160 @@
 # PowerGrid
 <img alt="Main View" src="assets/powergrid.png" />
 
----
+PowerGrid is a macOS power management project with two components:
+- A privileged daemon (`powergrid-daemon`) that enforces power policy.
+- A SwiftUI menu bar app (`PowerGrid.app`) that presents status and sends user-intent mutations.
 
-PowerGrid is a macOS power management tool composed of:
-- A root daemon that monitors battery/adapter state and applies charge-limiting logic.
-- A SwiftUI menu bar app that installs the daemon and provides controls and status.
+## Status
+PowerGrid is still experimental. Interfaces and internals can change.
 
-> ⚠️ Experimental project
-> 
-> PowerGrid is a testbed, not a polished product. Interfaces and behaviors may change. If you need a production-ready tool, consider established alternatives. Some noteworthy ones are listed below.
->
-> - [batt](https://github.com/charlie0129/batt)
-> - [battery](https://github.com/actuallymentor/battery)
+## Architecture
+- Daemon entrypoint: `cmd/powergrid-daemon`
+- Daemon internals:
+  - `internal/daemon/server` (RPC + orchestration)
+  - `internal/daemon/engine` (decision logic)
+  - `internal/daemon/session` (console-user preference profile)
+  - `internal/daemon/ipc` (UNIX socket security + RPC auth interceptor)
+- App entrypoint: `cmd/powergrid-app/PowerGrid/PowerGrid/PowerGridApp.swift`
+- RPC schema: `proto/powergrid.proto`
 
+## Security Model
+- Daemon runs as root.
+- IPC uses a UNIX socket at `/var/run/powergrid.sock` with restricted permissions (`0660`).
+- Socket ownership remains `root`, and socket group is updated at runtime:
+  - no active user: group reset to `root`
+  - active console user: group set to that user's primary GID (so the app can open the socket)
+- The daemon reads peer credentials and authorizes RPC calls by UID.
+- Allowed callers for read/mutation RPCs:
+  - root
+  - active console user
+- Mutating requests use one typed RPC envelope:
+  - `ApplyMutation(MutationRequest)`
+- Daemon diagnostics expose auth/build metadata through `GetDaemonInfo`:
+  - `auth_mode`
+  - `build_id_source` (`git`, `override`, `fallback`, `xcode-derived`, `unknown`)
+  - `build_dirty`
+
+## Runtime Behavior
+- Event-driven first: battery/sleep/wake events come from `powerkit-go` streaming.
+- Battery updates are coalesced/debounced to avoid redundant recomputation.
+- A slower watchdog fallback periodically recomputes state.
+- Hardware control operations are wrapped with bounded timeouts.
+- Shutdown is context-driven and waits (bounded) for background goroutines.
 
 ## Features
-
-- Menu bar status with icons for charge, charging state, and limiter active.
-- Control Center-Inspired Toggles: A grid of beautiful, macOS-style buttons provides immediate, one-click access to essential power management functions like Force Discharge and Prevent Display Sleep.
-- Live status: current charge, adapter description, health (%), cycle count.
-- Time estimates: Time to Full (while charging) or Time to Empty (while discharging), formatted hh:mm. Time to Full automatically scales to your active charge limit when <100% and hides when full/at limit/paused.
-- Power metrics: system, adapter, and battery wattage; adapter input voltage and amperage.
-- Charge limit slider from 60–100%.
-- Power Assertions: Prevent Display/System Sleep.
-- Force Discharge: Discharges even when an adapter is present; only selectable if an adapter is present.
-- Force Discharge Automatic: Discharges to your limit, then auto-disables; only selectable above limit.
-- Native Notifications: Alerts for key events (e.g., cutoff), single permission prompt.
-- Low Power Notifications: Alerts at 20% and 10% while discharging; includes an action button to enable macOS Low Power Mode when off.
-- Advanced Battery Details: When enabled in Advanced Options, shows additional battery information below the power metrics.
-  - Serial Number, Design/Maximum/Nominal Capacity (mAh)
-  - Battery Voltage (V), Battery Current (A), Temperature (°C)
-  - Individual Cell Voltages (V) and a Drift indicator: Normal (green), Slight (yellow), High (red)
-- Disable Charging Before Sleep: Configurable in Advanced Options and persisted per user by the daemon. When enabled, the daemon proactively disables charging on system sleep.
-- MagSafe LED Control: When enabled in Advanced Options (and supported by hardware), the daemon reflects charging modes on the MagSafe LED.
-  - Charging (limit off or below limit): Amber
-  - Fully charged or at/above user limit: Green
-  - Force Discharge: Off
-  - Low battery (≤10%): Amber blinking
-  - Safe default: when disabled or on startup, LED is returned to System control
-- Developer submenu: In dirty builds, Advanced Options shows a "Developer" submenu with short forms of both BuildIDs and tooltips with full hashes.
-
-## Getting Started: Building from Source
-
-This project uses a `Makefile` to automate the build process.
-
-#### 1. Prerequisites
-
-- macOS with Xcode (26+ recommended) installed.
-- Go toolchain.
-- Homebrew for installing protobuf dependencies:
-  ```bash
-  brew install protobuf swift-protobuf protoc-gen-grpc-swift
-  ```
-- Clone the repository:
-  ```bash
-  git clone https://github.com/peterneutron/powergrid.git
-  ```
-
-#### 2. One-Time Setup in Xcode
-
-Before you can build from the command line, you need to configure code signing once in Xcode.
-
-1.  Open `PowerGrid.xcodeproj` in Xcode.
-2.  In the project navigator, select the "PowerGrid" project, then the "PowerGrid" target.
-3.  Go to the **"Signing & Capabilities"** tab.
-4.  From the **"Team"** dropdown, select your personal Apple ID. Xcode will automatically create a local development certificate for you.
-5.  You can now close Xcode.
-
-#### 3. Pick a Build Lane
-
-Every lane writes artifacts into `./build` and runs `make proto` as needed to keep generated sources in sync.
-
-- `make build` – unsigned local build. Equivalent to invoking `make` with no arguments; runs the protobuf generator, copies the Swift stubs, and produces `build/PowerGrid.app` with signing disabled.
-- `make devsigned` – development-signed build using automatic signing. Provide `SIGNING_IDENTITY="Apple Development: Your Name (TEAMID)"` when you know the exact identity; otherwise the Makefile launches `scripts/select_signing_identity.sh` to discover certificates via the `security` tool and prompt you to choose.
-- `make archive` – manual-signing archive for maintainers. Accepts/auto-discovers `SIGNING_IDENTITY` in the same way and creates `build/PowerGrid.xcarchive`.
-- `make export` – exports an `.app` from the latest archive using `ExportOptions.plist`.
-- `make package` – creates `build/PowerGrid.zip` from the unsigned app bundle.
-- `make clean` – removes `./build` plus generated protobuf outputs.
-
-Notes on version pairing and build artifacts:
-- During every build lane, the daemon is compiled with an ldflags-stamped `BuildID` and a sidecar file `powergrid-daemon.buildid` is produced and bundled into the app. This avoids coupling hashes to code signing.
-- The app compares its embedded `BuildID` to the daemon's `GetVersion` response on first connection to decide if an upgrade prompt is needed.
-
-> The signing helper script requires the Xcode command line tools and at least one Apple Development certificate in your login keychain.
-
-## Development Workflow
-
-The `Makefile` provides several targets to streamline development:
-
-- `make build`: Default unsigned lane (same as running `make`). Regenerates protobuf stubs before compiling.
-- `make devsigned`: Development-signed build that auto-selects your certificate if `SIGNING_IDENTITY` is not supplied.
-- `make archive`: Manual-signing archive for release validation.
-- `make export`: Export from the latest archive; tweak `ExportOptions.plist` for different export styles.
-- `make package`: Zip the unsigned app bundle for quick sharing.
-- `make proto`: Regenerate gRPC code only (useful when iterating on `proto/powergrid.proto`).
-- `make clean`: Remove build artifacts and generated code to start fresh.
-- `sudo -E go run ./cmd/powergrid-daemon`: Run the daemon directly for debugging (requires root).
-
+- Charge limit (60-100) with per-user/system precedence.
+- Force discharge.
+- Prevent display/system sleep assertions.
+- Optional MagSafe LED policy control (if supported).
+- Optional disable-charging-before-sleep policy.
+- Low Power Mode read/toggle.
+- Live battery and adapter telemetry in the app.
 
 ## Configuration
+Preferences are persisted as plist files.
 
-PowerGrid uses standard macOS preferences (CFPreferences / `defaults`) and a simple precedence: user > system > built‑in default.
+- System daemon preferences:
+  - `/Library/Preferences/com.neutronstar.powergrid.daemon.plist`
+  - `ChargeLimit` (int, 60-100)
 
-- System (daemon): `/Library/Preferences/com.neutronstar.powergrid.daemon.plist`
-  - `ChargeLimit` (int, 60–100): System charge limit used when no user is active or user has no override.
+- Per-user preferences:
+  - `~/Library/Preferences/com.neutronstar.powergrid.plist`
+  - `ChargeLimit` (int, 60-100)
+  - `ControlMagsafeLED` (bool)
+  - `DisableChargingBeforeSleep` (bool)
 
-- Per‑user (daemon/app): `~/Library/Preferences/com.neutronstar.powergrid.plist`
-  - `ChargeLimit` (int, 60–100): User override for effective charge limit.
-  - `ControlMagsafeLED` (bool): When true (and supported), daemon controls MagSafe LED state.
-  - `DisableChargingBeforeSleep` (bool, default true): When true, daemon proactively disables charging on system sleep.
+## Build Prerequisites
+- macOS (Apple Silicon target)
+- Xcode + Command Line Tools
+- XcodeGen (`xcodegen`)
+- Go toolchain
+- Protobuf toolchain available in `PATH`:
+  - `protoc`
+  - `protoc-gen-go`
+  - `protoc-gen-go-grpc`
+  - `protoc-gen-swift`
+  - `protoc-gen-grpc-swift-2`
+- Optional lint tool:
+  - `golangci-lint`
 
-- App UI (UserDefaults in the app domain):
-  - `menuBarDisplayStyle`, `preferredChargeLimit`, `lowPowerNotificationsEnabled`, `showBatteryDetails`.
-  - These are UI-only and do not affect the daemon directly (except via RPC calls when you change settings in the app).
+## Build and Verify
+From `powergrid/`:
 
-Notes:
-- Low Power Mode (macOS) is not persisted by PowerGrid; the daemon reads the current state via `pmset -g` and toggles it via `pmset -a` when requested.
+- Generate Xcode project from source-of-truth spec:
+  - `make xcodegen`
+- Verify generated project is up to date:
+  - `make xcodegen-check`
+
+- Generate RPC code:
+  - `make proto`
+- Verify generated code is current:
+  - `make proto-check`
+- Run Go tests:
+  - `make test`
+- Run vet:
+  - `make vet`
+- Run lint:
+  - `make lint`
+- Run verify suite:
+  - `make verify`
+- Build unsigned app:
+  - `make build`
+- Build dev-signed app (free cert supported):
+  - `make devsigned`
+
+## Notes on Generated Code
+Generated protobuf/gRPC code is produced into `generated/` and copied into the Swift app RPC folder by `make proto`.
+Do not hand-edit generated files.
+
+## Signing Notes
+- Deterministic signing resolution is handled by `scripts/resolve-signing.sh`.
+- Supported env overrides:
+  - `SIGNING_IDENTITY`
+  - `DEVELOPMENT_TEAM`
+- Local signing overrides can be kept in:
+  - `cmd/powergrid-app/PowerGrid/Config/Signing.local.xcconfig`
+  - see `cmd/powergrid-app/PowerGrid/Config/Signing.local.xcconfig.example`
+
+## Compatibility Policy
+PowerGrid uses a two-layer contract:
+- Layer 1 (primary): protocol compatibility via daemon-reported API semver (`api_major`, `api_minor`) from `GetDaemonInfo`.
+- Layer 2 (secondary): BuildID + sidecar metadata for upgrade UX and diagnostics.
+
+Semver gate rules:
+- `api_major` mismatch: hard incompatible (app blocks mutating actions and shows install/upgrade path).
+- `api_minor` below app minimum: incompatible/degraded path per app policy.
+- `api_minor` at or above minimum (same major): compatible.
+
+BuildID semantics (non-blocking for compatibility):
+- clean BuildID mismatch: show "upgrade available".
+- dirty/fallback/xcode-derived BuildIDs: warning/diagnostic path only.
+- missing embedded BuildID sidecar: warn once; continue using semver gate.
+
+## Xcode Sandbox Notes
+- Script sandboxing remains enabled.
+- `scripts/build-go.sh` is sandbox-safe by design in Xcode mode:
+  - no `git` usage in Xcode mode,
+  - deterministic `xcode-derived` BuildID,
+  - outputs written to `${DERIVED_FILE_DIR}/powergrid-go`.
+- Artifact staging into app resources is handled by Xcode script phases with declared `inputFiles`/`outputFiles` from `project.yml`.
+
+Quick troubleshooting checklist:
+- Run `make xcodegen` after changing `project.yml`.
+- Ensure app bundle resources contain:
+  - `powergrid-daemon`
+  - `powergrid-helper`
+  - `powergrid-daemon.buildid`
+  - `com.neutronstar.powergrid.daemon.plist`
+- If upgrade prompts look wrong, check daemon info first (`api_major`/`api_minor`) before BuildID comparisons.
 
 ## Logging
+Daemon logs use macOS unified logging subsystem `com.neutronstar.powergrid.daemon`.
 
-All daemon activity is logged to the macOS Unified Logging system. You can view logs using Console.app or the command line:
+Example:
 ```bash
 log stream --predicate 'subsystem == "com.neutronstar.powergrid.daemon"'
 ```
 
-## Acknowledgments
-
-- Built on [PowerKit-Go](https://github.com/peterneutron/powerkit-go) for IOKit/SMC access and event streaming.
-- Google Gemini and OpenAI GPT families of models and all the labs involved making these possible 🙏
+## Related Project
+PowerGrid uses `powerkit-go` for low-level macOS power telemetry/control APIs.

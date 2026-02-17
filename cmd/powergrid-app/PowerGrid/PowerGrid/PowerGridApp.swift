@@ -58,6 +58,9 @@ struct MenuBarLabelView: View {
             case .upgradeAvailable:
                 Text("PG")
                 Image(systemName: "arrow.triangle.2.circlepath")
+            case .incompatibleDaemon:
+                Text("PG")
+                Image(systemName: "exclamationmark.triangle.fill")
                 
             case .installed:
                 switch client.connectionState {
@@ -145,6 +148,8 @@ struct AppMenuView: View {
                 
             case .notInstalled, .failed, .upgradeAvailable:
                 InstallationView(client: client)
+            case .incompatibleDaemon:
+                InstallationView(client: client)
                 
             case .installed:
                 if client.connectionState == .connected, let status = client.status {
@@ -173,14 +178,19 @@ struct InstallationView: View {
     @ObservedObject var client: DaemonClient
     
     var body: some View {
+        let isUpgradeLikeState: Bool = {
+            if client.installerState == .upgradeAvailable { return true }
+            if case .incompatibleDaemon = client.installerState { return true }
+            return false
+        }()
         VStack(spacing: 12) {
-            Text(client.installerState == .upgradeAvailable ? "PowerGrid Daemon Upgrade Available" : "PowerGrid Daemon Required")
+            Text(isUpgradeLikeState ? "PowerGrid Daemon Upgrade Required" : "PowerGrid Daemon Required")
                 .font(.title2).bold()
             
-            Text(client.installerState == .upgradeAvailable
+            Text(isUpgradeLikeState
                  ? (client.embeddedDaemonBuildID?.hasSuffix("-dirty") == true
                     ? "Dev build detected (dirty). You can upgrade now or skip to use the installed daemon."
-                    : "A newer daemon is bundled with this app. Upgrade to keep features in sync.")
+                    : "An updated compatible daemon is required. Upgrade to keep features in sync.")
                  : "To manage your Mac's charging, PowerGrid needs to install a small helper daemon that runs in the background as root.")
                 .font(.callout)
             
@@ -189,8 +199,13 @@ struct InstallationView: View {
                     .foregroundColor(.red)
                     .font(.caption)
             }
+            if case .incompatibleDaemon(let reason) = client.installerState {
+                Text("Incompatible daemon: \(reason)")
+                    .foregroundColor(.red)
+                    .font(.caption)
+            }
             
-            Button(client.installerState == .upgradeAvailable ? "Upgrade Daemon" : "Install Daemon") {
+            Button(isUpgradeLikeState ? "Upgrade Daemon" : "Install Daemon") {
                 Task {
                     await client.installDaemon()
                 }
@@ -213,7 +228,6 @@ struct InstallationView: View {
         }
     }
 }
-
 
 struct MainControlsView: View {
     @ObservedObject var client: DaemonClient
@@ -484,9 +498,21 @@ struct BatteryDetailsView: View {
                 }
                 GridRow {
                     Text("Drift:")
-                    let (label, color) = driftLabelAndColor(millivolts: status.batteryIndividualCellMillivolts)
-                    let mvOpt = driftMilliVolts(millivolts: status.batteryIndividualCellMillivolts)
-                    Text(mvOpt == nil ? label : "\(label) (\(mvOpt!) mV)")
+                    let driftMv = Int(status.batteryVoltageDriftMv)
+                    let state = status.batteryBalanceState
+                    let (label, color): (String, Color) = {
+                        switch state {
+                        case "balanced":
+                            return ("Balanced", .green)
+                        case "slight_imbalance":
+                            return ("Slight", .yellow)
+                        case "high_imbalance":
+                            return ("High", .red)
+                        default:
+                            return ("—", .secondary)
+                        }
+                    }()
+                    Text(state == "unknown" ? label : "\(label) (\(driftMv) mV)")
                         .foregroundStyle(color)
                         .gridColumnAlignment(.leading)
                     Text("")
@@ -495,23 +521,6 @@ struct BatteryDetailsView: View {
             .padding(.top, 6)
         }
     }
-}
-
-private func driftLabelAndColor(millivolts: [Int32]) -> (String, Color) {
-    guard millivolts.count >= 2 else { return ("—", .secondary) }
-    let ints = millivolts.map { Int($0) }
-    guard let minV = ints.min(), let maxV = ints.max() else { return ("—", .secondary) }
-    let drift = maxV - minV // mV
-    if drift <= 10 { return ("Normal", .green) }
-    if drift <= 30 { return ("Slight", .yellow) }
-    return ("High", .red)
-}
-
-private func driftMilliVolts(millivolts: [Int32]) -> Int? {
-    guard millivolts.count >= 2 else { return nil }
-    let ints = millivolts.map { Int($0) }
-    guard let minV = ints.min(), let maxV = ints.max() else { return nil }
-    return maxV - minV
 }
 
 struct ControlsView: View {
@@ -621,8 +630,8 @@ struct QuickActionsView: View {
             MultiStateActionButton<ForceDischargeMode>(
                 title: "Force Discharge",
                 states: [
-                    ActionState(value: .off,  imageName: "bolt.fill",                 tint: .red, help: "Charge normally"),
-                    ActionState(value: .on,   imageName: "bolt.badge.xmark.fill",     tint: .red, help: "Force discharge"),
+                    ActionState(value: .off, imageName: "bolt.fill", tint: nil, help: "Charge normally"),
+                    ActionState(value: .on, imageName: "bolt.badge.xmark.fill", tint: .red, help: "Force discharge"),
                     ActionState(value: .auto, imageName: "bolt.badge.automatic.fill", tint: .red, help: "Auto: Disable at \(userLimit)%")
                 ],
                 selection: $client.userIntent.forceDischargeMode,
@@ -650,19 +659,32 @@ struct QuickActionsView: View {
             // Do not forcibly flip Auto off on charge changes here;
             // the RulesEngine handles disabling FD and the UI updates accordingly.
 
-            MultiStateActionButton<Bool>(
+            MultiStateActionButton<SleepQuickMode>(
                 title: "Display Sleep",
                 states: [
-                    ActionState(value: false, imageName: "moon.fill",     tint: .green, help: "Allows display sleep"),
-                    ActionState(value: true,  imageName: "sun.max.fill",  tint: .green, help: "Prevents display sleep")
+                    ActionState(value: .off, imageName: "moon.fill", tint: nil, help: "Allows sleep"),
+                    ActionState(value: .preventSystem, imageName: "sun.min.fill", tint: .yellow, help: "Prevents system sleep"),
+                    ActionState(value: .preventDisplay, imageName: "sun.max.fill", tint: .green, help: "Prevents display sleep")
                 ],
-                selection: $client.userIntent.preventDisplaySleep,
+                selection: sleepModeBinding(),
                 size: 48,
                 enableHaptics: true,
                 showsCaption: false,
-                isActiveProvider: { $0 },
-                onChange: { isOn in
-                    Task { await client.setPowerFeature(feature: .preventDisplaySleep, enable: isOn) }
+                isActiveProvider: { $0 != .off },
+                onChange: { mode in
+                    Task {
+                        switch mode {
+                        case .off:
+                            await client.setPowerFeature(feature: .preventDisplaySleep, enable: false)
+                            await client.setPowerFeature(feature: .preventSystemSleep, enable: false)
+                        case .preventSystem:
+                            await client.setPowerFeature(feature: .preventDisplaySleep, enable: false)
+                            await client.setPowerFeature(feature: .preventSystemSleep, enable: true)
+                        case .preventDisplay:
+                            await client.setPowerFeature(feature: .preventSystemSleep, enable: true)
+                            await client.setPowerFeature(feature: .preventDisplaySleep, enable: true)
+                        }
+                    }
                 }
             )
 
@@ -672,7 +694,7 @@ struct QuickActionsView: View {
                     ActionState(
                         value: false,
                         imageName: "infinity",
-                        tint: .green,
+                        tint: nil,
                         help: "No charging limit",
                         accessibilityLabel: "Limit Off"
                     ),
@@ -698,9 +720,9 @@ struct QuickActionsView: View {
             MultiStateActionButton<MenuBarDisplayStyle>(
                 title: "Icons",
                 states: [
-                    ActionState(value: .iconAndText, imageName: "circle.grid.2x1.fill",          tint: .green,  help: "Menu bar (Icon + Text)"),
-                    ActionState(value: .iconOnly,    imageName: "circle.grid.2x1.left.filled",   tint: .yellow, help: "Menu bar (Icon Only)"),
-                    ActionState(value: .textOnly,    imageName: "circle.grid.2x1.right.filled",  tint: .red,    help: "Menu bar (Text Only)")
+                    ActionState(value: .iconAndText, imageName: "circle.grid.2x1.fill", tint: .green, help: "Menu bar (Icon + Text)"),
+                    ActionState(value: .iconOnly, imageName: "circle.grid.2x1.left.filled", tint: .yellow, help: "Menu bar (Icon Only)"),
+                    ActionState(value: .textOnly, imageName: "circle.grid.2x1.right.filled", tint: .red, help: "Menu bar (Text Only)")
                 ],
                 selection: $client.userIntent.menuBarDisplayStyle,
                 size: 48,
@@ -720,6 +742,33 @@ struct QuickActionsView: View {
             set: { turnOn in
                 let newLimit = turnOn ? client.userIntent.preferredChargeLimit : 100
                 client.userIntent.chargeLimit = newLimit
+            }
+        )
+    }
+
+    private func sleepModeBinding() -> Binding<SleepQuickMode> {
+        Binding<SleepQuickMode>(
+            get: {
+                if client.userIntent.preventDisplaySleep {
+                    return .preventDisplay
+                }
+                if client.userIntent.preventSystemSleep {
+                    return .preventSystem
+                }
+                return .off
+            },
+            set: { mode in
+                switch mode {
+                case .off:
+                    client.userIntent.preventDisplaySleep = false
+                    client.userIntent.preventSystemSleep = false
+                case .preventSystem:
+                    client.userIntent.preventDisplaySleep = false
+                    client.userIntent.preventSystemSleep = true
+                case .preventDisplay:
+                    client.userIntent.preventSystemSleep = true
+                    client.userIntent.preventDisplaySleep = true
+                }
             }
         )
     }
@@ -752,6 +801,18 @@ struct FooterActionsView: View {
             HStack {
                 Menu("Advanced Options") {
                     VStack(alignment: .leading) {
+                        if #available(macOS 13.0, *) {
+                            Toggle(
+                                "Run at Login",
+                                isOn: Binding<Bool>(
+                                    get: { client.runAtLoginEnabled },
+                                    set: { newValue in
+                                        Task { await client.setRunAtLogin(newValue) }
+                                    }
+                                )
+                            )
+                        }
+
                         Toggle("Prevent System Sleep", isOn: $client.userIntent.preventSystemSleep)
                             .disabled(client.userIntent.preventDisplaySleep)
                             .onChange(of: client.userIntent.preventSystemSleep) { _, newValue in

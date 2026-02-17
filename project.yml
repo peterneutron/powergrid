@@ -1,0 +1,166 @@
+name: PowerGrid
+
+options:
+  createIntermediateGroups: true
+  groupSortPosition: top
+  developmentLanguage: en
+
+packages:
+  grpc-swift-nio-transport:
+    url: https://github.com/grpc/grpc-swift-nio-transport.git
+    from: 2.0.0
+  grpc-swift-2:
+    url: https://github.com/grpc/grpc-swift-2.git
+    from: 2.1.0
+  swift-nio:
+    url: https://github.com/apple/swift-nio.git
+    from: 2.85.0
+  grpc-swift-protobuf:
+    url: https://github.com/grpc/grpc-swift-protobuf.git
+    from: 2.0.0
+  swift-protobuf:
+    url: https://github.com/apple/swift-protobuf.git
+    from: 1.30.0
+
+settings:
+  base:
+    MACOSX_DEPLOYMENT_TARGET: 15.5
+    CODE_SIGN_STYLE: Automatic
+    DEVELOPMENT_TEAM: ""
+    LOCALIZATION_PREFERS_STRING_CATALOGS: YES
+    SWIFT_VERSION: 5.0
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+  configs:
+    Debug:
+      SWIFT_ACTIVE_COMPILATION_CONDITIONS: "DEBUG $(inherited)"
+      SWIFT_OPTIMIZATION_LEVEL: -Onone
+    Release:
+      SWIFT_COMPILATION_MODE: wholemodule
+
+targets:
+  PowerGrid:
+    type: application
+    platform: macOS
+    deploymentTarget: "15.5"
+    sources:
+      - path: cmd/powergrid-app/PowerGrid/PowerGrid
+        excludes:
+          - Info.plist
+    resources:
+    configFiles:
+      Debug: cmd/powergrid-app/PowerGrid/Config/Base.xcconfig
+      Release: cmd/powergrid-app/PowerGrid/Config/Base.xcconfig
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.neutronstar.PowerGrid
+        PRODUCT_NAME: "$(TARGET_NAME)"
+        CURRENT_PROJECT_VERSION: 1
+        MARKETING_VERSION: 1.0
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_FILE: PowerGrid/Info.plist
+        INFOPLIST_KEY_CFBundleDisplayName: PowerGrid
+        INFOPLIST_KEY_LSUIElement: YES
+        INFOPLIST_KEY_NSAppleEventsUsageDescription: PowerGrid needs your permission to run a script that will install its required helper daemon.
+        CODE_SIGN_ENTITLEMENTS: PowerGrid/PowerGrid.entitlements
+        ENABLE_HARDENED_RUNTIME: YES
+        REGISTER_APP_GROUPS: YES
+        DEAD_CODE_STRIPPING: YES
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS: NO
+    preBuildScripts:
+      - name: Generate Go Artifacts
+        shell: /bin/zsh
+        script: |
+          "${SRCROOT}/../../../scripts/build-go.sh"
+        inputFiles:
+          - "${SRCROOT}/../../../cmd/powergrid-daemon/main.go"
+          - "${SRCROOT}/../../../cmd/powergrid-helper/main.go"
+          - "${SRCROOT}/../../../go.mod"
+          - "${SRCROOT}/../../../go.sum"
+          - "${SRCROOT}/../../../scripts/build-go.sh"
+        outputFiles:
+          - "$(DERIVED_FILE_DIR)/powergrid-go/powergrid-daemon"
+          - "$(DERIVED_FILE_DIR)/powergrid-go/powergrid-helper"
+          - "$(DERIVED_FILE_DIR)/powergrid-go/powergrid-daemon.buildid"
+          - "$(DERIVED_FILE_DIR)/powergrid-go/powergrid-daemon.buildmeta"
+      - name: Stage Go Artifacts
+        shell: /bin/zsh
+        script: |
+          set -euo pipefail
+          DEST="${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}"
+          mkdir -p "${DEST}"
+          cp "${DERIVED_FILE_DIR}/powergrid-go/powergrid-daemon" "${DEST}/powergrid-daemon"
+          cp "${DERIVED_FILE_DIR}/powergrid-go/powergrid-helper" "${DEST}/powergrid-helper"
+          cp "${DERIVED_FILE_DIR}/powergrid-go/powergrid-daemon.buildid" "${DEST}/powergrid-daemon.buildid"
+          cp "${SRCROOT}/../../../install/com.neutronstar.powergrid.daemon.plist" "${DEST}/com.neutronstar.powergrid.daemon.plist"
+        inputFiles:
+          - "$(DERIVED_FILE_DIR)/powergrid-go/powergrid-daemon"
+          - "$(DERIVED_FILE_DIR)/powergrid-go/powergrid-helper"
+          - "$(DERIVED_FILE_DIR)/powergrid-go/powergrid-daemon.buildid"
+          - "${SRCROOT}/../../../install/com.neutronstar.powergrid.daemon.plist"
+        outputFiles:
+          - "$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/powergrid-daemon"
+          - "$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/powergrid-helper"
+          - "$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/powergrid-daemon.buildid"
+          - "$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/com.neutronstar.powergrid.daemon.plist"
+        basedOnDependencyAnalysis: false
+        showEnvVars: false
+    dependencies:
+      - package: grpc-swift-nio-transport
+        product: GRPCNIOTransportHTTP2
+      - package: grpc-swift-2
+        product: GRPCCore
+      - package: grpc-swift-2
+        product: GRPCInProcessTransport
+      - package: swift-nio
+        product: NIOCore
+      - package: grpc-swift-protobuf
+        product: GRPCProtobuf
+      - package: swift-protobuf
+        product: SwiftProtobuf
+
+  PowerGridTests:
+    type: bundle.unit-test
+    platform: macOS
+    deploymentTarget: "15.5"
+    sources:
+      - path: cmd/powergrid-app/PowerGrid/PowerGridTests
+    dependencies:
+      - target: PowerGrid
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.neutronstar.PowerGridTests
+        PRODUCT_NAME: "$(TARGET_NAME)"
+        CURRENT_PROJECT_VERSION: 1
+        MARKETING_VERSION: 1.0
+        GENERATE_INFOPLIST_FILE: YES
+        BUNDLE_LOADER: "$(TEST_HOST)"
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/PowerGrid.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/PowerGrid"
+
+  PowerGridUITests:
+    type: bundle.ui-testing
+    platform: macOS
+    deploymentTarget: "15.5"
+    sources:
+      - path: cmd/powergrid-app/PowerGrid/PowerGridUITests
+    dependencies:
+      - target: PowerGrid
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.neutronstar.PowerGridUITests
+        PRODUCT_NAME: "$(TARGET_NAME)"
+        CURRENT_PROJECT_VERSION: 1
+        MARKETING_VERSION: 1.0
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: PowerGrid
+
+schemes:
+  PowerGrid:
+    shared: true
+    build:
+      targets:
+        PowerGrid: all
+    test:
+      targets:
+        - name: PowerGridTests

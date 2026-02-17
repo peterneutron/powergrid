@@ -75,8 +75,8 @@ struct LowBattery20Rule: Rule {
         ctx.currentIntent.lowPowerNotificationsEnabled && !ctx.currentStatus.isCharging && !ctx.pausedAtOrAboveLimit
     }
     func shouldFire(_ ctx: RuleContext) -> RuleAction? {
-        guard ctx.previousStatus != nil else { return nil }
-        let prev = Int(ctx.previousStatus!.currentCharge)
+        guard let previous = ctx.previousStatus else { return nil }
+        let prev = Int(previous.currentCharge)
         let curr = Int(ctx.currentStatus.currentCharge)
         if prev > 20 && curr <= 20 {
             return .notifyLowPower(threshold: 20)
@@ -91,8 +91,8 @@ struct LowBattery10Rule: Rule {
         ctx.currentIntent.lowPowerNotificationsEnabled && !ctx.currentStatus.isCharging && !ctx.pausedAtOrAboveLimit
     }
     func shouldFire(_ ctx: RuleContext) -> RuleAction? {
-        guard ctx.previousStatus != nil else { return nil }
-        let prev = Int(ctx.previousStatus!.currentCharge)
+        guard let previous = ctx.previousStatus else { return nil }
+        let prev = Int(previous.currentCharge)
         let curr = Int(ctx.currentStatus.currentCharge)
         if prev > 10 && curr <= 10 {
             return .notifyLowPower(threshold: 10)
