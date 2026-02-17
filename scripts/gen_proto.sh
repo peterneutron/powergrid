@@ -29,7 +29,7 @@ else
 fi
 
 PROTO_FILE="${PROJECT_ROOT}/proto/powergrid.proto"
-GO_OUT_DIR="${PROJECT_ROOT}/generated/go"
+GO_OUT_DIR="${PROJECT_ROOT}/internal/rpc"
 SWIFT_OUT_DIR="${PROJECT_ROOT}/generated/swift" # New temporary location
 MANIFEST_PATH="${PROJECT_ROOT}/generated/proto.manifest"
 SWIFT_TARGET_DIR="${PROJECT_ROOT}/cmd/powergrid-app/PowerGrid/PowerGrid/internal/rpc"

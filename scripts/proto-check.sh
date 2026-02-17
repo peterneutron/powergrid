@@ -4,7 +4,7 @@ set -euo pipefail
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
 PROJECT_ROOT="${SCRIPT_DIR}/.."
 MANIFEST="${PROJECT_ROOT}/generated/proto.manifest"
-GO_DIR="${PROJECT_ROOT}/generated/go"
+GO_DIR="${PROJECT_ROOT}/internal/rpc"
 SWIFT_GEN_DIR="${PROJECT_ROOT}/generated/swift"
 SWIFT_APP_DIR="${PROJECT_ROOT}/cmd/powergrid-app/PowerGrid/PowerGrid/internal/rpc"
 
