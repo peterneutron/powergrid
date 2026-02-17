@@ -1,0 +1,50 @@
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  enable:
+    - errcheck
+    - govet
+    - goconst
+    - gocritic
+    - gocyclo
+    - ineffassign
+    - staticcheck
+    - unused
+    - unconvert
+    - tparallel
+    - whitespace
+  settings:
+    goconst:
+      min-len: 3
+      min-occurrences: 3
+    gocritic:
+      enabled-tags:
+        - performance
+      disabled-checks:
+        - ifElseChain
+        - dupSubExpr
+      settings:
+        captLocal:
+          paramsOnly: true
+        rangeValCopy:
+          sizeThreshold: 32
+    gocyclo:
+      min-complexity: 25
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    gofmt:
+      simplify: false
+    goimports:
+      local-prefixes:
+        - powergrid
+
+issues:
+  max-same-issues: 0

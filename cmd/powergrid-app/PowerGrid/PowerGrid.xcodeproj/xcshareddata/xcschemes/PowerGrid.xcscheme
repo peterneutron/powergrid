@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Scheme
-   LastUpgradeVersion = "2600"
+   LastUpgradeVersion = "1430"
    version = "1.7">
    <BuildAction
       parallelizeBuildables = "YES"
       buildImplicitDependencies = "YES"
-      buildArchitectures = "Automatic">
+      runPostActionsOnFailure = "NO">
       <BuildActionEntries>
          <BuildActionEntry
             buildForTesting = "YES"
@@ -15,7 +15,7 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "9E434EFE2E40137800A33F45"
+               BlueprintIdentifier = "4EB65F118FC6F6002695DEF6"
                BuildableName = "PowerGrid.app"
                BlueprintName = "PowerGrid"
                ReferencedContainer = "container:PowerGrid.xcodeproj">
@@ -28,31 +28,31 @@
       selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
       shouldUseLaunchSchemeArgsEnv = "YES"
-      shouldAutocreateTestPlan = "YES">
+      onlyGenerateCoverageForSpecifiedTargets = "NO">
+      <MacroExpansion>
+         <BuildableReference
+            BuildableIdentifier = "primary"
+            BlueprintIdentifier = "4EB65F118FC6F6002695DEF6"
+            BuildableName = "PowerGrid.app"
+            BlueprintName = "PowerGrid"
+            ReferencedContainer = "container:PowerGrid.xcodeproj">
+         </BuildableReference>
+      </MacroExpansion>
       <Testables>
          <TestableReference
             skipped = "NO"
-            parallelizable = "YES">
+            parallelizable = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "9E434F0C2E40137A00A33F45"
+               BlueprintIdentifier = "149FE0401C1227C333A3DE4E"
                BuildableName = "PowerGridTests.xctest"
                BlueprintName = "PowerGridTests"
                ReferencedContainer = "container:PowerGrid.xcodeproj">
             </BuildableReference>
          </TestableReference>
-         <TestableReference
-            skipped = "NO"
-            parallelizable = "YES">
-            <BuildableReference
-               BuildableIdentifier = "primary"
-               BlueprintIdentifier = "9E434F162E40137A00A33F45"
-               BuildableName = "PowerGridUITests.xctest"
-               BlueprintName = "PowerGridUITests"
-               ReferencedContainer = "container:PowerGrid.xcodeproj">
-            </BuildableReference>
-         </TestableReference>
       </Testables>
+      <CommandLineArguments>
+      </CommandLineArguments>
    </TestAction>
    <LaunchAction
       buildConfiguration = "Debug"
@@ -68,7 +68,7 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "9E434EFE2E40137800A33F45"
+            BlueprintIdentifier = "4EB65F118FC6F6002695DEF6"
             BuildableName = "PowerGrid.app"
             BlueprintName = "PowerGrid"
             ReferencedContainer = "container:PowerGrid.xcodeproj">
@@ -85,7 +85,7 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "9E434EFE2E40137800A33F45"
+            BlueprintIdentifier = "4EB65F118FC6F6002695DEF6"
             BuildableName = "PowerGrid.app"
             BlueprintName = "PowerGrid"
             ReferencedContainer = "container:PowerGrid.xcodeproj">

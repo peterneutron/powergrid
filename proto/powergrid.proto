@@ -5,9 +5,9 @@ option go_package = "powergrid/internal/rpc";
 
 service PowerGrid {
   rpc GetStatus(Empty) returns (StatusResponse);
-  rpc SetChargeLimit(SetChargeLimitRequest) returns (Empty);
-  rpc SetPowerFeature(SetPowerFeatureRequest) returns (Empty);
+  rpc ApplyMutation(MutationRequest) returns (Empty);
   rpc GetVersion(Empty) returns (VersionResponse);
+  rpc GetDaemonInfo(Empty) returns (DaemonInfoResponse);
 }
 
 message Empty {}
@@ -46,10 +46,8 @@ message StatusResponse {
   float  battery_amperage = 31;           // A
   repeated int32 battery_individual_cell_millivolts = 32; // Per-cell voltage in mV
   float  battery_temperature_c = 33;      // °C
-}
-
-message SetChargeLimitRequest {
-  int32 limit = 1; // The new charge limit, e.g., 80.
+  int32  battery_voltage_drift_mv = 34;   // Cell max-min drift in mV
+  string battery_balance_state = 35;      // balanced | slight_imbalance | high_imbalance | unknown
 }
 
 enum PowerFeature {
@@ -62,11 +60,30 @@ enum PowerFeature {
   DISABLE_CHARGING_BEFORE_SLEEP = 6; // Toggle disabling charging before sleep
 }
 
-message SetPowerFeatureRequest {
-  PowerFeature feature = 1;
-  bool enable = 2;
+enum MutationOperation {
+  MUTATION_OPERATION_UNSPECIFIED = 0;
+  SET_CHARGE_LIMIT = 1;
+  SET_POWER_FEATURE = 2;
+}
+
+message MutationRequest {
+  MutationOperation operation = 1;
+  int32 limit = 2;
+  PowerFeature feature = 3;
+  bool enable = 4;
 }
 
 message VersionResponse {
   string build_id = 1; // Daemon build identifier (e.g., SHA-256 of executable)
+}
+
+message DaemonInfoResponse {
+  string build_id = 1;
+  string auth_mode = 2;
+  bool   magsafe_led_supported = 3;
+  string build_id_source = 4; // git, override, fallback, unknown
+  bool   build_dirty = 5;
+  uint32 api_major = 6;
+  uint32 api_minor = 7;
+  repeated string capabilities = 8;
 }

@@ -8,6 +8,7 @@
 
 import Foundation
 import UserNotifications
+import ServiceManagement
 import GRPCCore
 import GRPCNIOTransportHTTP2Posix
 import GRPCProtobuf
@@ -17,6 +18,13 @@ enum ForceDischargeMode: String, Equatable {
     case off
     case on
     case auto
+}
+
+enum BuildClassification {
+    case clean
+    case dirty
+    case fallback
+    case unknown
 }
 
 struct UserIntent: Equatable {
@@ -62,6 +70,7 @@ struct UserIntent: Equatable {
             case uninstalling
             case installed
             case upgradeAvailable
+            case incompatibleDaemon(String)
             case failed(String)
         }
         
@@ -82,7 +91,19 @@ struct UserIntent: Equatable {
         private var autoArmed = false // Auto is engaged (Auto selected AND FD active)
         @Published private(set) var embeddedDaemonBuildID: String?
         @Published private(set) var installedDaemonBuildID: String?
+        @Published private(set) var daemonAuthMode: String?
+        @Published private(set) var daemonMagsafeLedSupported: Bool = false
+        @Published private(set) var daemonBuildIDSource: String?
+        @Published private(set) var daemonBuildDirty: Bool = false
+        @Published private(set) var daemonAPIMajor: UInt32 = 0
+        @Published private(set) var daemonAPIMinor: UInt32 = 0
+        @Published private(set) var daemonCapabilities: [String] = []
+        @Published private(set) var runAtLoginEnabled: Bool = false
         private var skipUpgradeThisSession = false
+
+        // App<->daemon compatibility contract.
+        private let expectedAPIMajor: UInt32 = 1
+        private let minimumAPIMinor: UInt32 = 0
         
         init() {
             if let savedValue = UserDefaults.standard.string(forKey: "menuBarDisplayStyle"),
@@ -104,7 +125,7 @@ struct UserIntent: Equatable {
                 self.userIntent.lowPowerNotificationsEnabled = true
                 UserDefaults.standard.set(true, forKey: "lowPowerNotificationsEnabled")
             }
-            
+            refreshRunAtLoginStatus()
             connect()
         }
         
@@ -159,24 +180,33 @@ struct UserIntent: Equatable {
                     do {
                         let ver = try await client.getVersion(Rpc_Empty())
                         self.installedDaemonBuildID = ver.buildID
+                        await refreshDaemonInfo(client)
+                        _ = self.evaluateCompatibility()
+                        self.applyUpgradePolicy()
                     } catch {
                         // Older daemon without GetVersion RPC: treat as upgrade available
                         if let rpcError = error as? GRPCCore.RPCError, rpcError.code == .unimplemented {
                             self.installedDaemonBuildID = nil
+                            self.daemonBuildIDSource = nil
+                            self.daemonBuildDirty = false
+                            self.daemonAPIMajor = 0
+                            self.daemonAPIMinor = 0
+                            self.daemonCapabilities = []
                             if self.embeddedDaemonBuildID != nil {
                                 self.installerState = .upgradeAvailable
                             }
                         } else {
                             // Leave as is; we won't force upgrade on other errors
                             self.installedDaemonBuildID = nil
+                            self.daemonBuildIDSource = nil
+                            self.daemonBuildDirty = false
+                            self.daemonAPIMajor = 0
+                            self.daemonAPIMinor = 0
+                            self.daemonCapabilities = []
                         }
                     }
-                    // If embedded build is a dev/dirty build, prompt upgrade regardless, unless skipped
-                    if let local = self.embeddedDaemonBuildID, local.hasSuffix("-dirty"), !self.skipUpgradeThisSession {
-                        self.installerState = .upgradeAvailable
-                    } else if let local = self.embeddedDaemonBuildID, let remote = self.installedDaemonBuildID, local != remote, !self.skipUpgradeThisSession {
-                        self.installerState = .upgradeAvailable
-                    }
+                    _ = self.evaluateCompatibility()
+                    self.applyUpgradePolicy()
                 }
 
                 let response = try await client.getStatus(Rpc_Empty())
@@ -258,7 +288,9 @@ struct UserIntent: Equatable {
 
                 if connectionState != .connected {
                     connectionState = .connected
-                    if installerState != .upgradeAvailable { installerState = .installed }
+                    if installerState != .upgradeAvailable && !isIncompatibleInstallerState(installerState) {
+                        installerState = .installed
+                    }
                 }
             } catch {
                 if let rpcError = error as? GRPCCore.RPCError {
@@ -292,17 +324,125 @@ struct UserIntent: Equatable {
                 print("Embedded daemon BuildID file not found in bundle resources.")
             }
         }
+
+        private func refreshDaemonInfo(_ client: Rpc_PowerGrid.Client<HTTP2ClientTransport.Posix>) async {
+            do {
+                let info = try await client.getDaemonInfo(Rpc_Empty())
+                self.installedDaemonBuildID = info.buildID
+                self.daemonAuthMode = info.authMode
+                self.daemonMagsafeLedSupported = info.magsafeLedSupported
+                self.daemonBuildIDSource = info.buildIDSource.isEmpty ? nil : info.buildIDSource
+                self.daemonBuildDirty = info.buildDirty
+                self.daemonAPIMajor = info.apiMajor
+                self.daemonAPIMinor = info.apiMinor
+                self.daemonCapabilities = info.capabilities
+            } catch {
+                if let rpcError = error as? GRPCCore.RPCError, rpcError.code == .unimplemented {
+                    self.daemonAuthMode = nil
+                    self.daemonBuildIDSource = nil
+                    self.daemonBuildDirty = false
+                    self.daemonAPIMajor = 0
+                    self.daemonAPIMinor = 0
+                    self.daemonCapabilities = []
+                }
+            }
+        }
+
+        private func evaluateCompatibility() -> Bool {
+            // Legacy daemon without API fields: keep compatibility, rely on upgrade hinting.
+            if daemonAPIMajor == 0 && daemonAPIMinor == 0 {
+                return true
+            }
+            if daemonAPIMajor != expectedAPIMajor {
+                installerState = .incompatibleDaemon(
+                    "Daemon API v\(daemonAPIMajor).\(daemonAPIMinor) is incompatible with app API v\(expectedAPIMajor).x."
+                )
+                return false
+            }
+            if daemonAPIMinor < minimumAPIMinor {
+                installerState = .incompatibleDaemon(
+                    "Daemon API v\(daemonAPIMajor).\(daemonAPIMinor) is older than required v\(expectedAPIMajor).\(minimumAPIMinor)."
+                )
+                return false
+            }
+            return true
+        }
+
+        private func isIncompatibleInstallerState(_ state: InstallerState) -> Bool {
+            if case .incompatibleDaemon = state {
+                return true
+            }
+            return false
+        }
+
+        private func classifyEmbeddedBuild() -> BuildClassification {
+            guard let id = embeddedDaemonBuildID, !id.isEmpty else {
+                return .unknown
+            }
+            if id.hasSuffix("-dirty") { return .dirty }
+            if id.hasSuffix("-fallback") { return .fallback }
+            return .clean
+        }
+
+        private func classifyInstalledBuild() -> BuildClassification {
+            guard let id = installedDaemonBuildID, !id.isEmpty else {
+                return .unknown
+            }
+            if daemonBuildDirty || id.hasSuffix("-dirty") { return .dirty }
+            if daemonBuildIDSource == "fallback" || id.hasSuffix("-fallback") { return .fallback }
+            return .clean
+        }
+
+        private func applyUpgradePolicy() {
+            if skipUpgradeThisSession {
+                return
+            }
+            if isIncompatibleInstallerState(installerState) {
+                return
+            }
+
+            let embeddedClass = classifyEmbeddedBuild()
+            let installedClass = classifyInstalledBuild()
+
+            if embeddedClass == .dirty {
+                installerState = .upgradeAvailable
+                return
+            }
+
+            if embeddedClass == .clean, installedClass == .clean,
+               let local = embeddedDaemonBuildID, let remote = installedDaemonBuildID, local != remote {
+                installerState = .upgradeAvailable
+                return
+            }
+
+            if embeddedClass == .fallback || installedClass == .fallback {
+                // Fallback IDs are not strict upgrade blockers; keep current state.
+                return
+            }
+        }
         
         func setLimit(_ newLimit: Int) async {
             log("Setting charge limit to \(newLimit)%")
             guard let client = self.client else { return }
+            guard evaluateCompatibility() else { return }
             
-            var request = Rpc_SetChargeLimitRequest()
+            var request = Rpc_MutationRequest()
+            request.operation = .setChargeLimit
             request.limit = Int32(newLimit)
             
             do {
-                _ = try await client.setChargeLimit(request)
+                _ = try await client.applyMutation(request)
             } catch {
+                if let rpcError = error as? GRPCCore.RPCError {
+                    switch rpcError.code {
+                    case .permissionDenied:
+                        self.installerState = .failed("Permission denied: active console user authorization is required.")
+                    case .invalidArgument:
+                        self.installerState = .failed("Invalid request: \(rpcError.message)")
+                    default:
+                        self.installerState = .failed("Daemon mutation failed: \(rpcError.message)")
+                    }
+                }
                 print("Error setting limit: \(error)")
             }
             
@@ -318,12 +458,24 @@ struct UserIntent: Equatable {
         func setPowerFeature(feature: Rpc_PowerFeature, enable: Bool) async {
             log("Setting feature \(feature) to \(enable)")
             guard let client = self.client else { return }
-            var req = Rpc_SetPowerFeatureRequest()
+            guard evaluateCompatibility() else { return }
+            var req = Rpc_MutationRequest()
+            req.operation = .setPowerFeature
             req.feature = feature
             req.enable = enable
             do {
-                _ = try await client.setPowerFeature(req)
+                _ = try await client.applyMutation(req)
             } catch {
+                if let rpcError = error as? GRPCCore.RPCError {
+                    switch rpcError.code {
+                    case .permissionDenied:
+                        self.installerState = .failed("Permission denied: active console user authorization is required.")
+                    case .invalidArgument:
+                        self.installerState = .failed("Invalid request: \(rpcError.message)")
+                    default:
+                        self.installerState = .failed("Daemon mutation failed: \(rpcError.message)")
+                    }
+                }
                 print("Error setting power feature: \(error)")
             }
             
@@ -377,17 +529,26 @@ struct UserIntent: Equatable {
                 await computeEmbeddedBuildID()
             }
             guard let client = self.client else { return }
-            do {
-                let ver = try await client.getVersion(Rpc_Empty())
-                self.installedDaemonBuildID = ver.buildID
-                if let local = self.embeddedDaemonBuildID, local == ver.buildID {
-                    self.installerState = .installed
-                } else {
-                    self.installerState = .upgradeAvailable
+            let maxAttempts = 5
+            for attempt in 1...maxAttempts {
+                do {
+                    let ver = try await client.getVersion(Rpc_Empty())
+                    self.installedDaemonBuildID = ver.buildID
+                    await refreshDaemonInfo(client)
+                    _ = evaluateCompatibility()
+                    self.applyUpgradePolicy()
+                    if self.installerState != .upgradeAvailable && !isIncompatibleInstallerState(self.installerState) {
+                        self.installerState = .installed
+                    }
+                    return
+                } catch {
+                    if attempt == maxAttempts {
+                        print("Post-install GetVersion failed after \(maxAttempts) attempts: \(error)")
+                        return
+                    }
+                    let delayNanos = UInt64(250_000_000 * attempt)
+                    try? await Task.sleep(nanoseconds: delayNanos)
                 }
-            } catch {
-                // If version RPC still fails, leave IDs as-is; user can try again later
-                print("Post-install GetVersion failed: \(error)")
             }
         }
 
@@ -440,6 +601,31 @@ struct UserIntent: Equatable {
         
         private func log(_ message: String) {
             print("[DaemonClient] \(message)")
+        }
+
+        func refreshRunAtLoginStatus() {
+            guard #available(macOS 13.0, *) else {
+                self.runAtLoginEnabled = false
+                return
+            }
+            self.runAtLoginEnabled = (SMAppService.mainApp.status == .enabled)
+        }
+
+        func setRunAtLogin(_ enabled: Bool) async {
+            guard #available(macOS 13.0, *) else {
+                return
+            }
+
+            do {
+                if enabled {
+                    try await SMAppService.mainApp.register()
+                } else {
+                    try await SMAppService.mainApp.unregister()
+                }
+            } catch {
+                log("Failed to set Run at Login to \(enabled): \(error)")
+            }
+            refreshRunAtLoginStatus()
         }
 
         // Notifications are handled via NotificationsService
