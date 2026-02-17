@@ -60,8 +60,8 @@ jobs:
       - name: Proto check
         run: make proto-check
 
-      - name: XcodeGen check
-        run: make xcodegen-check
+      - name: XcodeGen generate
+        run: make xcodegen
 
       - name: Install SwiftLint
         run: |
@@ -80,6 +80,6 @@ jobs:
           xcodebuild test \
             -project cmd/powergrid-app/PowerGrid/PowerGrid.xcodeproj \
             -scheme PowerGrid \
-            -destination 'platform=macOS' \
+            -destination 'platform=macOS,arch=arm64' \
             CODE_SIGNING_ALLOWED=NO \
             -only-testing:PowerGridTests

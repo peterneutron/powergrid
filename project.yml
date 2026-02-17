@@ -25,6 +25,9 @@ packages:
 settings:
   base:
     MACOSX_DEPLOYMENT_TARGET: 15.5
+    ARCHS: arm64
+    "EXCLUDED_ARCHS[sdk=macosx*]": x86_64
+    ALWAYS_SEARCH_USER_PATHS: NO
     CODE_SIGN_STYLE: Automatic
     DEVELOPMENT_TEAM: ""
     LOCALIZATION_PREFERS_STRING_CATALOGS: YES
@@ -34,6 +37,7 @@ settings:
     Debug:
       SWIFT_ACTIVE_COMPILATION_CONDITIONS: "DEBUG $(inherited)"
       SWIFT_OPTIMIZATION_LEVEL: -Onone
+      ENABLE_TESTABILITY: YES
     Release:
       SWIFT_COMPILATION_MODE: wholemodule
 
