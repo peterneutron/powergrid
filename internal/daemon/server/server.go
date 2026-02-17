@@ -15,13 +15,13 @@ import (
 
 	"github.com/peterneutron/powerkit-go/pkg/powerkit"
 
-	rpc "powergrid/generated/go"
 	cfg "powergrid/internal/config"
 	consoleuser "powergrid/internal/consoleuser"
 	"powergrid/internal/daemon/engine"
 	"powergrid/internal/daemon/ipc"
 	"powergrid/internal/daemon/session"
 	oslogger "powergrid/internal/oslogger"
+	rpc "powergrid/internal/rpc"
 )
 
 const (
