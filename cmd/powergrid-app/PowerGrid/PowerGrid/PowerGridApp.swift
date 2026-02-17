@@ -630,7 +630,7 @@ struct QuickActionsView: View {
             MultiStateActionButton<ForceDischargeMode>(
                 title: "Force Discharge",
                 states: [
-                    ActionState(value: .off, imageName: "bolt.fill", tint: .red, help: "Charge normally"),
+                    ActionState(value: .off, imageName: "bolt.fill", tint: nil, help: "Charge normally"),
                     ActionState(value: .on, imageName: "bolt.badge.xmark.fill", tint: .red, help: "Force discharge"),
                     ActionState(value: .auto, imageName: "bolt.badge.automatic.fill", tint: .red, help: "Auto: Disable at \(userLimit)%")
                 ],
@@ -659,19 +659,32 @@ struct QuickActionsView: View {
             // Do not forcibly flip Auto off on charge changes here;
             // the RulesEngine handles disabling FD and the UI updates accordingly.
 
-            MultiStateActionButton<Bool>(
+            MultiStateActionButton<SleepQuickMode>(
                 title: "Display Sleep",
                 states: [
-                    ActionState(value: false, imageName: "moon.fill", tint: .green, help: "Allows display sleep"),
-                    ActionState(value: true, imageName: "sun.max.fill", tint: .green, help: "Prevents display sleep")
+                    ActionState(value: .off, imageName: "moon.fill", tint: nil, help: "Allows sleep"),
+                    ActionState(value: .preventSystem, imageName: "sun.min.fill", tint: .yellow, help: "Prevents system sleep"),
+                    ActionState(value: .preventDisplay, imageName: "sun.max.fill", tint: .green, help: "Prevents display sleep")
                 ],
-                selection: $client.userIntent.preventDisplaySleep,
+                selection: sleepModeBinding(),
                 size: 48,
                 enableHaptics: true,
                 showsCaption: false,
-                isActiveProvider: { $0 },
-                onChange: { isOn in
-                    Task { await client.setPowerFeature(feature: .preventDisplaySleep, enable: isOn) }
+                isActiveProvider: { $0 != .off },
+                onChange: { mode in
+                    Task {
+                        switch mode {
+                        case .off:
+                            await client.setPowerFeature(feature: .preventDisplaySleep, enable: false)
+                            await client.setPowerFeature(feature: .preventSystemSleep, enable: false)
+                        case .preventSystem:
+                            await client.setPowerFeature(feature: .preventDisplaySleep, enable: false)
+                            await client.setPowerFeature(feature: .preventSystemSleep, enable: true)
+                        case .preventDisplay:
+                            await client.setPowerFeature(feature: .preventSystemSleep, enable: true)
+                            await client.setPowerFeature(feature: .preventDisplaySleep, enable: true)
+                        }
+                    }
                 }
             )
 
@@ -681,7 +694,7 @@ struct QuickActionsView: View {
                     ActionState(
                         value: false,
                         imageName: "infinity",
-                        tint: .green,
+                        tint: nil,
                         help: "No charging limit",
                         accessibilityLabel: "Limit Off"
                     ),
@@ -732,6 +745,33 @@ struct QuickActionsView: View {
             }
         )
     }
+
+    private func sleepModeBinding() -> Binding<SleepQuickMode> {
+        Binding<SleepQuickMode>(
+            get: {
+                if client.userIntent.preventDisplaySleep {
+                    return .preventDisplay
+                }
+                if client.userIntent.preventSystemSleep {
+                    return .preventSystem
+                }
+                return .off
+            },
+            set: { mode in
+                switch mode {
+                case .off:
+                    client.userIntent.preventDisplaySleep = false
+                    client.userIntent.preventSystemSleep = false
+                case .preventSystem:
+                    client.userIntent.preventDisplaySleep = false
+                    client.userIntent.preventSystemSleep = true
+                case .preventDisplay:
+                    client.userIntent.preventSystemSleep = true
+                    client.userIntent.preventDisplaySleep = true
+                }
+            }
+        )
+    }
     
     private func handleAdapterPresence(adapterPresent: Bool) {
         // If adapter is removed while force discharge is active or selected, immediately reflect Off in UI
@@ -761,6 +801,18 @@ struct FooterActionsView: View {
             HStack {
                 Menu("Advanced Options") {
                     VStack(alignment: .leading) {
+                        if #available(macOS 13.0, *) {
+                            Toggle(
+                                "Run at Login",
+                                isOn: Binding<Bool>(
+                                    get: { client.runAtLoginEnabled },
+                                    set: { newValue in
+                                        Task { await client.setRunAtLogin(newValue) }
+                                    }
+                                )
+                            )
+                        }
+
                         Toggle("Prevent System Sleep", isOn: $client.userIntent.preventSystemSleep)
                             .disabled(client.userIntent.preventDisplaySleep)
                             .onChange(of: client.userIntent.preventSystemSleep) { _, newValue in

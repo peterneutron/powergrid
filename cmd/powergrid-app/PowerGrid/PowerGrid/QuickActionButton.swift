@@ -21,17 +21,18 @@ struct CircleToggleStyle: ButtonStyle {
     var isOn: Bool
     var hovering: Bool
     var size: CGFloat
-    var tintColor: Color = .accentColor
+    var tintColor: Color?
 
     func makeBody(configuration: Configuration) -> some View {
         let pressed = configuration.isPressed
+        let activeTint = tintColor ?? .accentColor
 
         return configuration.label
             .scaleEffect(pressed ? 0.96 : (hovering ? 1.03 : 1.0))
             .animation(.spring(response: 0.22, dampingFraction: 0.85), value: pressed)
             .animation(.spring(response: 0.28, dampingFraction: 0.9), value: hovering)
 
-            .foregroundStyle(isOn ? tintColor : Color.primary.opacity(0.85))
+            .foregroundStyle(isOn ? activeTint : Color.primary.opacity(0.85))
 
             .background(
                 ZStack {
@@ -39,7 +40,7 @@ struct CircleToggleStyle: ButtonStyle {
 
                     if isOn {
                         Circle()
-                            .fill(tintColor.opacity(0.22))
+                            .fill(activeTint.opacity(0.22))
                             .transition(.opacity)
                     }
 
@@ -52,7 +53,7 @@ struct CircleToggleStyle: ButtonStyle {
 
             .overlay(
                 Circle()
-                    .strokeBorder(isOn ? tintColor : .secondary.opacity(0.35),
+                    .strokeBorder(isOn ? activeTint : .secondary.opacity(0.35),
                                   lineWidth: isOn ? 1.6 : 1)
                     .opacity(hovering ? 1 : 0.8)
             )
@@ -116,7 +117,7 @@ struct MultiStateActionButton<Value: Equatable>: View {
 
     var body: some View {
         let image = currentState?.imageName ?? "questionmark"
-        let tint = currentState?.tint ?? .accentColor
+        let tint = currentState?.tint
 
         VStack(spacing: showsCaption ? 8 : 0) {
             Button {

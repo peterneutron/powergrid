@@ -8,6 +8,7 @@
 
 import Foundation
 import UserNotifications
+import ServiceManagement
 import GRPCCore
 import GRPCNIOTransportHTTP2Posix
 import GRPCProtobuf
@@ -97,6 +98,7 @@ struct UserIntent: Equatable {
         @Published private(set) var daemonAPIMajor: UInt32 = 0
         @Published private(set) var daemonAPIMinor: UInt32 = 0
         @Published private(set) var daemonCapabilities: [String] = []
+        @Published private(set) var runAtLoginEnabled: Bool = false
         private var skipUpgradeThisSession = false
 
         // App<->daemon compatibility contract.
@@ -123,7 +125,7 @@ struct UserIntent: Equatable {
                 self.userIntent.lowPowerNotificationsEnabled = true
                 UserDefaults.standard.set(true, forKey: "lowPowerNotificationsEnabled")
             }
-            
+            refreshRunAtLoginStatus()
             connect()
         }
         
@@ -599,6 +601,31 @@ struct UserIntent: Equatable {
         
         private func log(_ message: String) {
             print("[DaemonClient] \(message)")
+        }
+
+        func refreshRunAtLoginStatus() {
+            guard #available(macOS 13.0, *) else {
+                self.runAtLoginEnabled = false
+                return
+            }
+            self.runAtLoginEnabled = (SMAppService.mainApp.status == .enabled)
+        }
+
+        func setRunAtLogin(_ enabled: Bool) async {
+            guard #available(macOS 13.0, *) else {
+                return
+            }
+
+            do {
+                if enabled {
+                    try await SMAppService.mainApp.register()
+                } else {
+                    try await SMAppService.mainApp.unregister()
+                }
+            } catch {
+                log("Failed to set Run at Login to \(enabled): \(error)")
+            }
+            refreshRunAtLoginStatus()
         }
 
         // Notifications are handled via NotificationsService
