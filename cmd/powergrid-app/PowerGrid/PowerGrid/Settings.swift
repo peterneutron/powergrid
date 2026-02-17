@@ -27,3 +27,9 @@ struct AppSettings {
     static let menuBarDisplayStyleKey = "menuBarDisplayStyle"
     static let showBatteryDetailsKey = "showBatteryDetails"
 }
+
+enum SleepQuickMode: String, Equatable {
+    case off
+    case preventSystem
+    case preventDisplay
+}
