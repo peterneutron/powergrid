@@ -25,6 +25,8 @@ packages:
 settings:
   base:
     MACOSX_DEPLOYMENT_TARGET: 15.5
+    ARCHS: arm64
+    "EXCLUDED_ARCHS[sdk=macosx*]": x86_64
     CODE_SIGN_STYLE: Automatic
     DEVELOPMENT_TEAM: ""
     LOCALIZATION_PREFERS_STRING_CATALOGS: YES
