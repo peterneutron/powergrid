@@ -125,6 +125,10 @@ vet:
 	@go vet ./...
 
 lint:
+	@if ! command -v golangci-lint >/dev/null 2>&1; then \
+	  echo "❌ golangci-lint not found. Install golangci-lint or run in CI where it is provisioned."; \
+	  exit 1; \
+	fi
 	@golangci-lint run
 
 proto-check:

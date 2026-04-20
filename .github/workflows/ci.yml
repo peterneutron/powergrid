@@ -2,11 +2,29 @@ name: powergrid-ci
 
 on:
   push:
+    branches:
+      - master
+    tags:
+      - "v*"
   pull_request:
+    branches:
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   verify:
     runs-on: macos-latest
+    timeout-minutes: 45
+    env:
+      GOWORK: off
+      HOMEBREW_NO_AUTO_UPDATE: 1
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -16,21 +34,15 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Install xcodegen
+      - name: Install Homebrew build tools
         run: |
-          VERSION=2.44.1
-          curl -fsSL -o /tmp/xcodegen.zip "https://github.com/yonaskolb/XcodeGen/releases/download/${VERSION}/xcodegen.zip"
-          unzip -q /tmp/xcodegen.zip -d /tmp/xcodegen
-          XCODEGEN_BIN="$(find /tmp/xcodegen -type f -name xcodegen | head -n1)"
-          chmod +x "$XCODEGEN_BIN"
-          sudo mv "$XCODEGEN_BIN" /usr/local/bin/xcodegen
-          xcodegen --version
+          brew install xcodegen protobuf swift-protobuf grpc-swift swiftlint
 
-      - name: Install proto toolchain
+      - name: Install Go build tools
         run: |
-          brew install protobuf swift-protobuf grpc-swift
           go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.6
           go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.5.1
+          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.3.1
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
       - name: Verify required build tools
@@ -43,43 +55,11 @@ jobs:
           command -v protoc-gen-go-grpc
           command -v protoc-gen-swift
           command -v protoc-gen-grpc-swift-2 || command -v protoc-gen-grpc-swift
+          command -v golangci-lint
+          command -v swiftlint
+          xcodegen --version
+          swiftlint version
           protoc --version
 
-      - name: Go test
-        run: go test ./...
-
-      - name: Go vet
-        run: go vet ./...
-
-      - name: golangci-lint
-        uses: golangci/golangci-lint-action@v7
-        with:
-          install-mode: goinstall
-          version: v2.3.1
-
-      - name: Proto check
-        run: make proto-check
-
-      - name: XcodeGen generate
-        run: make xcodegen
-
-      - name: Install SwiftLint
-        run: |
-          if command -v swiftlint >/dev/null 2>&1; then
-            swiftlint version
-          else
-            brew install swiftlint
-            swiftlint version
-          fi
-
-      - name: SwiftLint
-        run: make swiftlint
-
-      - name: Swift tests
-        run: |
-          xcodebuild test \
-            -project cmd/powergrid-app/PowerGrid/PowerGrid.xcodeproj \
-            -scheme PowerGrid \
-            -destination 'platform=macOS,arch=arm64' \
-            CODE_SIGNING_ALLOWED=NO \
-            -only-testing:PowerGridTests
+      - name: Verify
+        run: make verify

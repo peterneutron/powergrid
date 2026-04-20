@@ -40,10 +40,8 @@ var logger = oslogger.NewLogger(logSubsystem, "Daemon")
 var (
 	streamSystemEventsFn = powerkit.StreamSystemEventsWithHooks
 	setChargingStateFn   = powerkit.SetChargingState
-	getSystemInfoFn      = func(opts ...powerkit.FetchOptions) (*powerkit.SystemInfo, error) {
-		return powerkit.GetSystemInfo(opts...)
-	}
-	nowFn = time.Now
+	getSystemInfoFn      = powerkit.GetSystemInfo
+	nowFn                = time.Now
 )
 
 type Daemon struct {
