@@ -3,9 +3,11 @@ set -euo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
 PROJECT_ROOT="${SCRIPT_DIR}/.."
-SPEC_FILE="${PROJECT_ROOT}/project.yml"
+SPEC_FILE="${PROJECT_ROOT}/cmd/powergrid-app/PowerGrid/project.yml"
 PROJECT_PATH="${PROJECT_ROOT}/cmd/powergrid-app/PowerGrid/PowerGrid.xcodeproj"
 PBXPROJ_PATH="${PROJECT_PATH}/project.pbxproj"
+XCODEGEN_SPEC="./cmd/powergrid-app/PowerGrid/project.yml"
+XCODEGEN_PROJECT="./cmd/powergrid-app/PowerGrid"
 
 if ! command -v xcodegen >/dev/null 2>&1; then
   echo "error: xcodegen not found in PATH" >&2
@@ -18,6 +20,7 @@ normalize_pbxproj() {
   sed -E \
     -e 's/objectVersion = [0-9]+;/objectVersion = <normalized>;/g' \
     -e 's/preferredProjectObjectVersion = [0-9]+;/preferredProjectObjectVersion = <normalized>;/g' \
+    -e 's/compatibilityVersion = "Xcode [^"]+";/compatibilityVersion = "Xcode <normalized>";/g' \
     "$src" >"$dst"
 }
 
@@ -33,13 +36,23 @@ fi
 
 before_norm="$(mktemp)"
 after_norm="$(mktemp)"
-trap 'rm -f "$before_norm" "$after_norm"' EXIT
+project_backup="$(mktemp -d)"
+project_backup_path="${project_backup}/PowerGrid.xcodeproj"
+trap 'rm -f "$before_norm" "$after_norm"; rm -rf "$project_backup"' EXIT
 
-normalize_pbxproj "$PBXPROJ_PATH" "$before_norm"
+cp -R "$PROJECT_PATH" "$project_backup_path"
+normalize_pbxproj "${project_backup_path}/project.pbxproj" "$before_norm"
 before_hash="$(shasum -a 256 "$before_norm" | awk '{print $1}')"
-xcodegen generate --spec "$SPEC_FILE" --project "${PROJECT_ROOT}/cmd/powergrid-app/PowerGrid" >/dev/null
+(
+  cd "$PROJECT_ROOT"
+  xcodegen generate --spec "$XCODEGEN_SPEC" --project "$XCODEGEN_PROJECT" >/dev/null
+)
 normalize_pbxproj "$PBXPROJ_PATH" "$after_norm"
 after_hash="$(shasum -a 256 "$after_norm" | awk '{print $1}')"
+
+rm -rf "$PROJECT_PATH"
+cp -R "$project_backup_path" "$PROJECT_PATH"
+
 if [[ "$before_hash" != "$after_hash" ]]; then
   echo "error: Xcode project is stale. Run: make xcodegen" >&2
   diff -u "$before_norm" "$after_norm" | sed -n '1,120p' >&2 || true

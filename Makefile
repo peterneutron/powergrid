@@ -5,7 +5,7 @@ APP_NAME        ?= PowerGrid
 PROJECT_DIR     ?= ./cmd/powergrid-app/PowerGrid
 PROJECT         ?= $(PROJECT_DIR)/$(APP_NAME).xcodeproj
 XCODEGEN_PROJECT ?= $(PROJECT_DIR)
-XCODEGEN_SPEC   ?= ./project.yml
+XCODEGEN_SPEC   ?= $(PROJECT_DIR)/project.yml
 SCHEME          ?= PowerGrid
 CONFIGURATION   ?= Release
 BUILD_DIR       ?= ./build
@@ -31,7 +31,7 @@ $(BUILD_DIR_STAMP):
 
 xcodegen:
 	@echo "--> Generating Xcode project from $(XCODEGEN_SPEC)"
-	@xcodegen generate --spec "$(XCODEGEN_SPEC)" --project "$(XCODEGEN_PROJECT)"
+	@cd "$(CURDIR)" && xcodegen generate --spec "$(XCODEGEN_SPEC)" --project "$(XCODEGEN_PROJECT)"
 	@echo "✅ Xcode project generated at $(PROJECT)"
 
 xcodegen-check:
