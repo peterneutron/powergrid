@@ -15,12 +15,15 @@ echo "--- Generating gRPC Code ---"
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
 PROJECT_ROOT="${SCRIPT_DIR}/.."
+PLUGIN_RESOLVER_SCRIPT="${PROJECT_ROOT}/scripts/ensure-grpc-swift-plugin.sh"
 
 PROTOC_PATH="${PROTOC_PATH:-$(command -v protoc || true)}"
 SWIFT_PLUGIN_PATH="${SWIFT_PLUGIN_PATH:-$(command -v protoc-gen-swift || true)}"
-REQUIRED_GRPC_SWIFT_PLUGIN_VERSION_PREFIX="${REQUIRED_GRPC_SWIFT_PLUGIN_VERSION_PREFIX:-2.1.}"
+REQUIRED_GRPC_SWIFT_PLUGIN_VERSION_PREFIX="${REQUIRED_GRPC_SWIFT_PLUGIN_VERSION_PREFIX:-}"
 if [ -n "${GRPC_SWIFT_PLUGIN_PATH:-}" ]; then
     true
+elif [ -x "${PLUGIN_RESOLVER_SCRIPT}" ]; then
+    GRPC_SWIFT_PLUGIN_PATH="$("${PLUGIN_RESOLVER_SCRIPT}")"
 elif command -v protoc-gen-grpc-swift-2 >/dev/null 2>&1; then
     GRPC_SWIFT_PLUGIN_PATH="$(command -v protoc-gen-grpc-swift-2)"
 elif command -v protoc-gen-grpc-swift >/dev/null 2>&1; then
@@ -58,20 +61,22 @@ if [ -z "$GRPC_SWIFT_PLUGIN_PATH" ] || [ ! -x "$GRPC_SWIFT_PLUGIN_PATH" ]; then
     exit 1
 fi
 
-GRPC_SWIFT_PLUGIN_VERSION="$("$GRPC_SWIFT_PLUGIN_PATH" --version 2>/dev/null | awk '{print $2}')"
-if [ -z "$GRPC_SWIFT_PLUGIN_VERSION" ]; then
-    echo "❌ ERROR: Unable to determine protoc-gen-grpc-swift(-2) version from $GRPC_SWIFT_PLUGIN_PATH." >&2
-    exit 1
-fi
-
-case "$GRPC_SWIFT_PLUGIN_VERSION" in
-    "${REQUIRED_GRPC_SWIFT_PLUGIN_VERSION_PREFIX}"*)
-        ;;
-    *)
-        echo "❌ ERROR: protoc-gen-grpc-swift(-2) version ${GRPC_SWIFT_PLUGIN_VERSION} is incompatible. Expected ${REQUIRED_GRPC_SWIFT_PLUGIN_VERSION_PREFIX}x." >&2
+if [ -n "${REQUIRED_GRPC_SWIFT_PLUGIN_VERSION_PREFIX}" ]; then
+    GRPC_SWIFT_PLUGIN_VERSION="$("$GRPC_SWIFT_PLUGIN_PATH" --version 2>/dev/null | awk '{print $2}')"
+    if [ -z "$GRPC_SWIFT_PLUGIN_VERSION" ]; then
+        echo "❌ ERROR: Unable to determine protoc-gen-grpc-swift(-2) version from $GRPC_SWIFT_PLUGIN_PATH." >&2
         exit 1
-        ;;
-esac
+    fi
+
+    case "$GRPC_SWIFT_PLUGIN_VERSION" in
+        "${REQUIRED_GRPC_SWIFT_PLUGIN_VERSION_PREFIX}"*)
+            ;;
+        *)
+            echo "❌ ERROR: protoc-gen-grpc-swift(-2) version ${GRPC_SWIFT_PLUGIN_VERSION} is incompatible. Expected ${REQUIRED_GRPC_SWIFT_PLUGIN_VERSION_PREFIX}x." >&2
+            exit 1
+            ;;
+    esac
+fi
 
 mkdir -p "${GO_OUT_DIR}"
 mkdir -p "${SWIFT_OUT_DIR}"

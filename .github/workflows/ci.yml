@@ -18,7 +18,6 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   XCODEGEN_VERSION: 2.45.3
   SWIFTLINT_VERSION: 0.63.2
-  GRPC_SWIFT_PROTOBUF_PLUGIN_VERSION: 2.1.2
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -60,16 +59,6 @@ jobs:
 
           echo "$tool_bin" >> "$GITHUB_PATH"
 
-      - name: Install pinned gRPC Swift protoc plugin
-        run: |
-          set -euo pipefail
-          tool_bin="$RUNNER_TEMP/pinned-bin"
-          plugin_dir="$RUNNER_TEMP/grpc-swift-protobuf"
-          git clone --depth 1 --branch "${GRPC_SWIFT_PROTOBUF_PLUGIN_VERSION}" https://github.com/grpc/grpc-swift-protobuf.git "$plugin_dir"
-          swift build --package-path "$plugin_dir" -c release --product protoc-gen-grpc-swift-2
-          install -m 0755 "$plugin_dir/.build/release/protoc-gen-grpc-swift-2" "$tool_bin/protoc-gen-grpc-swift-2"
-          ln -sf "$tool_bin/protoc-gen-grpc-swift-2" "$tool_bin/protoc-gen-grpc-swift"
-
       - name: Install Go build tools
         run: |
           go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.6
@@ -86,13 +75,15 @@ jobs:
           command -v protoc-gen-go
           command -v protoc-gen-go-grpc
           command -v protoc-gen-swift
-          command -v protoc-gen-grpc-swift-2 || command -v protoc-gen-grpc-swift
+          command -v python3
           command -v golangci-lint
           command -v swiftlint
           xcodegen --version
           swiftlint version
           protoc --version
-          protoc-gen-grpc-swift-2 --version
+          plugin_path="$(bash ./scripts/ensure-grpc-swift-plugin.sh)"
+          test -x "$plugin_path"
+          "$plugin_path" --version
 
       - name: Verify
         run: make verify

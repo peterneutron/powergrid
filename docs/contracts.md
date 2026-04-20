@@ -121,9 +121,11 @@ Prerequisites:
   - `protoc-gen-go`
   - `protoc-gen-go-grpc`
   - `protoc-gen-swift`
-  - `protoc-gen-grpc-swift-2` or compatible `protoc-gen-grpc-swift`
 - optional local lint tool:
   - `golangci-lint`
+
+The repo builds and caches its pinned `protoc-gen-grpc-swift-2` automatically via
+`scripts/ensure-grpc-swift-plugin.sh`, using the app's checked-in Swift package graph.
 
 PowerGrid app and tests are Apple Silicon only:
 

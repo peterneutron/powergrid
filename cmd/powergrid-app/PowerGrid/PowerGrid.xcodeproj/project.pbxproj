@@ -256,6 +256,7 @@
 				};
 			};
 			buildConfigurationList = 08BA206E2CFF81010C272160 /* Build configuration list for PBXProject "PowerGrid" */;
+			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -272,7 +273,6 @@
 				C37CC54177F11922456730EB /* XCRemoteSwiftPackageReference "swift-protobuf" */,
 			);
 			preferredProjectObjectVersion = 77;
-			productRefGroup = 57BECC80F9FB2520E1B6EED1 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -591,7 +591,7 @@
 			repositoryURL = "https://github.com/grpc/grpc-swift-protobuf.git";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 2.0.0;
+				minimumVersion = 2.3.0;
 			};
 		};
 		39D5DA1790FEEEA41695BD9E /* XCRemoteSwiftPackageReference "grpc-swift-2" */ = {
@@ -599,7 +599,7 @@
 			repositoryURL = "https://github.com/grpc/grpc-swift-2.git";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 2.1.0;
+				minimumVersion = 2.4.0;
 			};
 		};
 		9F5F0B5FF598D4B1C16DBBEE /* XCRemoteSwiftPackageReference "swift-nio" */ = {
@@ -607,7 +607,7 @@
 			repositoryURL = "https://github.com/apple/swift-nio.git";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 2.85.0;
+				minimumVersion = 2.98.0;
 			};
 		};
 		C37CC54177F11922456730EB /* XCRemoteSwiftPackageReference "swift-protobuf" */ = {
@@ -615,7 +615,7 @@
 			repositoryURL = "https://github.com/apple/swift-protobuf.git";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 1.30.0;
+				minimumVersion = 1.37.0;
 			};
 		};
 		F81DD87832B4F2DD68E3FF9A /* XCRemoteSwiftPackageReference "grpc-swift-nio-transport" */ = {
@@ -623,7 +623,7 @@
 			repositoryURL = "https://github.com/grpc/grpc-swift-nio-transport.git";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 2.0.0;
+				minimumVersion = 2.7.0;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
