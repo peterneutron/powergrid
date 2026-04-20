@@ -12,10 +12,12 @@ import (
 
 const (
 	daemonName        = "powergrid-daemon"
+	cliName           = "powergridctl"
 	plistName         = "com.neutronstar.powergrid.daemon.plist"
 	installDir        = "/usr/local/bin"
 	launchDaemonsDir  = "/Library/LaunchDaemons"
 	daemonInstallPath = installDir + "/" + daemonName
+	cliInstallPath    = installDir + "/" + cliName
 	plistInstallPath  = launchDaemonsDir + "/" + plistName
 )
 
@@ -78,6 +80,19 @@ func install(resourcesPath string) error {
 	}
 	log.Println("✅ Daemon binary installed.")
 
+	sourceCLI := filepath.Join(resourcesPath, cliName)
+	log.Printf("Copying CLI from %s to %s", sourceCLI, cliInstallPath)
+	if err := copyFile(sourceCLI, cliInstallPath); err != nil {
+		return fmt.Errorf("could not copy CLI binary: %w", err)
+	}
+	if err := os.Chown(cliInstallPath, 0, 0); err != nil {
+		return fmt.Errorf("could not set CLI ownership: %w", err)
+	}
+	if err := os.Chmod(cliInstallPath, 0755); err != nil {
+		return fmt.Errorf("could not set CLI permissions: %w", err)
+	}
+	log.Println("✅ CLI binary installed.")
+
 	sourcePlist := filepath.Join(resourcesPath, plistName)
 	log.Printf("Copying plist from %s to %s", sourcePlist, plistInstallPath)
 	if err := copyFile(sourcePlist, plistInstallPath); err != nil {
@@ -127,6 +142,12 @@ func uninstall() error {
 		return fmt.Errorf("failed to remove daemon binary: %w", err)
 	}
 	log.Println("✅ Daemon binary removed.")
+
+	log.Printf("Removing CLI binary: %s", cliInstallPath)
+	if err := os.Remove(cliInstallPath); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("failed to remove CLI binary: %w", err)
+	}
+	log.Println("✅ CLI binary removed.")
 
 	log.Println("--- Uninstallation Complete ---")
 	return nil

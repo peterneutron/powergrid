@@ -180,6 +180,20 @@ func writeBool(path, key string, value bool) error {
 	return nil
 }
 
+func chownUserPlist(path string, uid, gid uint32) error {
+	if uid == 0 {
+		return nil
+	}
+	groupID := -1
+	if gid != 0 {
+		groupID = int(gid)
+	}
+	if err := os.Chown(path, int(uid), groupID); err != nil {
+		return fmt.Errorf("failed to set ownership on %q: %w", path, err)
+	}
+	return nil
+}
+
 func ReadSystemChargeLimit() int {
 	n, found, err := readInt(SystemPlistPath, KeyChargeLimit)
 	if err != nil || !found {
@@ -209,12 +223,29 @@ func EffectiveChargeLimit(userLimit, systemLimit, defaultLimit int) int {
 	return clampLimit(defaultLimit)
 }
 
-func WriteUserChargeLimit(homeDir string, uid uint32, limit int) error {
-	_ = uid
+func EnsureUserConfigOwnership(homeDir string, uid, gid uint32) error {
 	if homeDir == "" {
 		return os.ErrInvalid
 	}
-	return writeInt(userPlistPath(homeDir), KeyChargeLimit, clampLimit(limit))
+	path := userPlistPath(homeDir)
+	if _, err := os.Stat(path); err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	return chownUserPlist(path, uid, gid)
+}
+
+func WriteUserChargeLimit(homeDir string, uid, gid uint32, limit int) error {
+	if homeDir == "" {
+		return os.ErrInvalid
+	}
+	path := userPlistPath(homeDir)
+	if err := writeInt(path, KeyChargeLimit, clampLimit(limit)); err != nil {
+		return err
+	}
+	return chownUserPlist(path, uid, gid)
 }
 
 func ReadUserMagsafeLED(homeDir string) bool {
@@ -228,11 +259,15 @@ func ReadUserMagsafeLED(homeDir string) bool {
 	return val
 }
 
-func WriteUserMagsafeLED(homeDir string, enabled bool) error {
+func WriteUserMagsafeLED(homeDir string, uid, gid uint32, enabled bool) error {
 	if homeDir == "" {
 		return os.ErrInvalid
 	}
-	return writeBool(userPlistPath(homeDir), KeyMagsafeLED, enabled)
+	path := userPlistPath(homeDir)
+	if err := writeBool(path, KeyMagsafeLED, enabled); err != nil {
+		return err
+	}
+	return chownUserPlist(path, uid, gid)
 }
 
 func ReadUserDisableChargingBeforeSleep(homeDir string) bool {
@@ -246,11 +281,15 @@ func ReadUserDisableChargingBeforeSleep(homeDir string) bool {
 	return val
 }
 
-func WriteUserDisableChargingBeforeSleep(homeDir string, enabled bool) error {
+func WriteUserDisableChargingBeforeSleep(homeDir string, uid, gid uint32, enabled bool) error {
 	if homeDir == "" {
 		return os.ErrInvalid
 	}
-	return writeBool(userPlistPath(homeDir), KeyDisableCBS, enabled)
+	path := userPlistPath(homeDir)
+	if err := writeBool(path, KeyDisableCBS, enabled); err != nil {
+		return err
+	}
+	return chownUserPlist(path, uid, gid)
 }
 
 func EnsureSystemConfig(defaultLimit int) error {

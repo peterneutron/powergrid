@@ -80,12 +80,14 @@ targets:
         inputFiles:
           - "${SRCROOT}/../../../cmd/powergrid-daemon/main.go"
           - "${SRCROOT}/../../../cmd/powergrid-helper/main.go"
+          - "${SRCROOT}/../../../cmd/powergridctl/main.go"
           - "${SRCROOT}/../../../go.mod"
           - "${SRCROOT}/../../../go.sum"
           - "${SRCROOT}/../../../scripts/build-go.sh"
         outputFiles:
           - "$(DERIVED_FILE_DIR)/powergrid-go/powergrid-daemon"
           - "$(DERIVED_FILE_DIR)/powergrid-go/powergrid-helper"
+          - "$(DERIVED_FILE_DIR)/powergrid-go/powergridctl"
           - "$(DERIVED_FILE_DIR)/powergrid-go/powergrid-daemon.buildid"
           - "$(DERIVED_FILE_DIR)/powergrid-go/powergrid-daemon.buildmeta"
       - name: Stage Go Artifacts
@@ -96,16 +98,19 @@ targets:
           mkdir -p "${DEST}"
           cp "${DERIVED_FILE_DIR}/powergrid-go/powergrid-daemon" "${DEST}/powergrid-daemon"
           cp "${DERIVED_FILE_DIR}/powergrid-go/powergrid-helper" "${DEST}/powergrid-helper"
+          cp "${DERIVED_FILE_DIR}/powergrid-go/powergridctl" "${DEST}/powergridctl"
           cp "${DERIVED_FILE_DIR}/powergrid-go/powergrid-daemon.buildid" "${DEST}/powergrid-daemon.buildid"
           cp "${SRCROOT}/../../../install/com.neutronstar.powergrid.daemon.plist" "${DEST}/com.neutronstar.powergrid.daemon.plist"
         inputFiles:
           - "$(DERIVED_FILE_DIR)/powergrid-go/powergrid-daemon"
           - "$(DERIVED_FILE_DIR)/powergrid-go/powergrid-helper"
+          - "$(DERIVED_FILE_DIR)/powergrid-go/powergridctl"
           - "$(DERIVED_FILE_DIR)/powergrid-go/powergrid-daemon.buildid"
           - "${SRCROOT}/../../../install/com.neutronstar.powergrid.daemon.plist"
         outputFiles:
           - "$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/powergrid-daemon"
           - "$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/powergrid-helper"
+          - "$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/powergridctl"
           - "$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/powergrid-daemon.buildid"
           - "$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/com.neutronstar.powergrid.daemon.plist"
         basedOnDependencyAnalysis: false

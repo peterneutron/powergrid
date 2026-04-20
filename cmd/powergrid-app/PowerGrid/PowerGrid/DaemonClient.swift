@@ -49,15 +49,20 @@ struct UserIntent: Equatable {
         @Published var userIntent = UserIntent() {
             didSet {
                 if userIntent.menuBarDisplayStyle != oldValue.menuBarDisplayStyle {
-                    UserDefaults.standard.set(userIntent.menuBarDisplayStyle.rawValue, forKey: "menuBarDisplayStyle")
+                    preferences.setMenuBarDisplayStyle(userIntent.menuBarDisplayStyle)
                     log("Saved menu bar display style: \(userIntent.menuBarDisplayStyle.rawValue)")
                 }
+                if userIntent.preferredChargeLimit != oldValue.preferredChargeLimit,
+                   (60...99).contains(userIntent.preferredChargeLimit) {
+                    preferences.setPreferredChargeLimit(userIntent.preferredChargeLimit)
+                    log("Saved preferred charge limit: \(userIntent.preferredChargeLimit)%")
+                }
                 if userIntent.lowPowerNotificationsEnabled != oldValue.lowPowerNotificationsEnabled {
-                    UserDefaults.standard.set(userIntent.lowPowerNotificationsEnabled, forKey: "lowPowerNotificationsEnabled")
+                    preferences.setLowPowerNotificationsEnabled(userIntent.lowPowerNotificationsEnabled)
                     log("Saved low power notifications: \(userIntent.lowPowerNotificationsEnabled)")
                 }
                 if userIntent.showBatteryDetails != oldValue.showBatteryDetails {
-                    UserDefaults.standard.set(userIntent.showBatteryDetails, forKey: AppSettings.showBatteryDetailsKey)
+                    preferences.setShowBatteryDetails(userIntent.showBatteryDetails)
                     log("Saved showBatteryDetails: \(userIntent.showBatteryDetails)")
                 }
             }
@@ -100,33 +105,37 @@ struct UserIntent: Equatable {
         @Published private(set) var daemonCapabilities: [String] = []
         @Published private(set) var runAtLoginEnabled: Bool = false
         private var skipUpgradeThisSession = false
+        private let preferences = AppPreferences.shared
+        private var didStart = false
+        private var isPollingStatus = false
+        private var connectionGeneration: UInt64 = 0
 
         // App<->daemon compatibility contract.
         private let expectedAPIMajor: UInt32 = 1
         private let minimumAPIMinor: UInt32 = 0
         
         init() {
-            if let savedValue = UserDefaults.standard.string(forKey: "menuBarDisplayStyle"),
-               let style = MenuBarDisplayStyle(rawValue: savedValue) {
-                self.userIntent.menuBarDisplayStyle = style
+            var initialIntent = UserIntent()
+
+            if let style = preferences.menuBarDisplayStyle() {
+                initialIntent.menuBarDisplayStyle = style
                 log("Loaded menu bar display style: \(style.rawValue)")
             }
-            if let savedPref = UserDefaults.standard.object(forKey: "preferredChargeLimit") as? Int,
+            if let savedPref = preferences.preferredChargeLimit(),
                (60...99).contains(savedPref) {
-                self.userIntent.preferredChargeLimit = savedPref
+                initialIntent.preferredChargeLimit = savedPref
                 log("Loaded preferred charge limit: \(savedPref)%")
             }
-            if UserDefaults.standard.object(forKey: AppSettings.showBatteryDetailsKey) != nil {
-                self.userIntent.showBatteryDetails = UserDefaults.standard.bool(forKey: AppSettings.showBatteryDetailsKey)
+            if let showBatteryDetails = preferences.showBatteryDetails() {
+                initialIntent.showBatteryDetails = showBatteryDetails
             }
-            if UserDefaults.standard.object(forKey: "lowPowerNotificationsEnabled") != nil {
-                self.userIntent.lowPowerNotificationsEnabled = UserDefaults.standard.bool(forKey: "lowPowerNotificationsEnabled")
+            if let notificationsEnabled = preferences.lowPowerNotificationsEnabled() {
+                initialIntent.lowPowerNotificationsEnabled = notificationsEnabled
             } else {
-                self.userIntent.lowPowerNotificationsEnabled = true
-                UserDefaults.standard.set(true, forKey: "lowPowerNotificationsEnabled")
+                preferences.setLowPowerNotificationsEnabled(true)
             }
+            self.userIntent = initialIntent
             refreshRunAtLoginStatus()
-            connect()
         }
         
         deinit {
@@ -135,6 +144,16 @@ struct UserIntent: Equatable {
         }
         
         func connect() {
+            if connectionState == .connecting {
+                return
+            }
+
+            rawGRPCClient?.beginGracefulShutdown()
+            rawGRPCClient = nil
+            client = nil
+            transport = nil
+            connectionGeneration &+= 1
+            let generation = connectionGeneration
             connectionState = .connecting
             
             do {
@@ -152,11 +171,13 @@ struct UserIntent: Equatable {
                     do {
                         try await grpcClient.runConnections()
                         await MainActor.run {
+                            guard self.connectionGeneration == generation else { return }
                             self.connectionState = .disconnected
                         }
                     } catch {
                         print("gRPC client connection manager threw an error: \(error)")
                         await MainActor.run {
+                            guard self.connectionGeneration == generation else { return }
                             self.connectionState = .disconnected
                         }
                     }
@@ -165,6 +186,24 @@ struct UserIntent: Equatable {
                 print("Failed to initialize gRPC transport: \(error)")
                 self.connectionState = .disconnected
             }
+        }
+
+        func start() async {
+            guard !didStart else { return }
+            didStart = true
+            await pollStatus(forceReconnect: true)
+        }
+
+        func pollStatus(forceReconnect: Bool = false) async {
+            guard !isPollingStatus else { return }
+            isPollingStatus = true
+            defer { isPollingStatus = false }
+
+            if forceReconnect || self.client == nil || connectionState == .disconnected {
+                connect()
+            }
+
+            await fetchStatus()
         }
         
         func fetchStatus() async {
@@ -280,7 +319,7 @@ struct UserIntent: Equatable {
                         await NotificationsService.shared.post(title: "Force Discharge Disabled",
                                                                body: "Reached limit (\(limit)%). Re-enabled adapter.")
                     case .notifyLowPower(let threshold):
-                        let includeAction = !(response.lowPowerModeEnabled)
+                        let includeAction = response.lowPowerModeAvailable && !(response.lowPowerModeEnabled)
                         await NotificationsService.shared.postLowPowerAlert(threshold: threshold, includeEnableAction: includeAction)
                     }
                 }
@@ -448,8 +487,6 @@ struct UserIntent: Equatable {
             
             if newLimit < 100 {
                 self.userIntent.preferredChargeLimit = newLimit
-                UserDefaults.standard.set(newLimit, forKey: "preferredChargeLimit")
-                log("Saved preferred charge limit: \(newLimit)%")
             }
 
             await fetchStatus()
@@ -603,6 +640,17 @@ struct UserIntent: Equatable {
             print("[DaemonClient] \(message)")
         }
 
+        func setMenuBarDisplayStyle(_ style: MenuBarDisplayStyle) {
+            guard userIntent.menuBarDisplayStyle != style else { return }
+
+            userIntent.menuBarDisplayStyle = style
+        }
+
+        func setPreferredChargeLimit(_ limit: Int) {
+            guard (60...99).contains(limit) else { return }
+            userIntent.preferredChargeLimit = limit
+        }
+
         func refreshRunAtLoginStatus() {
             guard #available(macOS 13.0, *) else {
                 self.runAtLoginEnabled = false
@@ -618,7 +666,7 @@ struct UserIntent: Equatable {
 
             do {
                 if enabled {
-                    try await SMAppService.mainApp.register()
+                    try SMAppService.mainApp.register()
                 } else {
                     try await SMAppService.mainApp.unregister()
                 }

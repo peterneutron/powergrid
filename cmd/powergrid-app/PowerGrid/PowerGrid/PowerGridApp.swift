@@ -15,16 +15,10 @@ struct PowerGridApp: App {
     private let notificationHandler = NotificationActionHandler()
     
     let timer = Timer.publish(every: 5, on: .main, in: .common).autoconnect()
-    @State private var isMenuOpen: Bool = false
 
     var body: some Scene {
         MenuBarExtra {
-            AppMenuView(client: client, isMenuOpen: $isMenuOpen)
-                .onReceive(timer) { _ in
-                    guard client.connectionState == .connected else { return }
-                    guard !isMenuOpen else { return }
-                    Task { await client.fetchStatus() }
-                }
+            AppMenuView(client: client)
         } label: {
             MenuBarLabelView(client: client)
                 .task {
@@ -32,8 +26,10 @@ struct PowerGridApp: App {
                     await NotificationsService.shared.registerLowPowerCategory()
                     notificationHandler.client = client
                     UNUserNotificationCenter.current().delegate = notificationHandler
-                    client.connect()
-                    await client.fetchStatus()
+                    await client.start()
+                }
+                .onReceive(timer) { _ in
+                    Task { await client.pollStatus() }
                 }
         }
         .menuBarExtraStyle(.window)
@@ -42,6 +38,23 @@ struct PowerGridApp: App {
 
 struct MenuBarLabelView: View {
     @ObservedObject var client: DaemonClient
+
+    private func labelColor(for status: Rpc_StatusResponse) -> Color {
+        let adapterPresent = Int(status.adapterMaxWatts) > 0
+        if status.forceDischargeActive && adapterPresent {
+            return .red
+        }
+        return .primary
+    }
+
+    @ViewBuilder
+    private func lowPowerBadge(for status: Rpc_StatusResponse) -> some View {
+        if status.lowPowerModeEnabled {
+            Image(systemName: "battery.25percent")
+                .imageScale(.small)
+                .accessibilityLabel("Low Power Mode Enabled")
+        }
+    }
 
     var body: some View {
         HStack(spacing: 2) {
@@ -66,14 +79,20 @@ struct MenuBarLabelView: View {
                 switch client.connectionState {
                 case .connected:
                     if let status = client.status {
+                        let tint = labelColor(for: status)
                         switch client.userIntent.menuBarDisplayStyle {
                         case .iconAndText:
                             StatusTextLabel(status: status)
+                                .foregroundStyle(tint)
                             StatusIconLabel(status: status)
+                                .foregroundStyle(tint)
                         case .iconOnly:
                             StatusIconLabel(status: status)
+                                .foregroundStyle(tint)
                         case .textOnly:
                             StatusTextLabel(status: status)
+                                .foregroundStyle(tint)
+                            lowPowerBadge(for: status)
                         }
                     } else {
                         Text("PG")
@@ -110,6 +129,9 @@ private struct StatusIconLabel: View {
         if status.forceDischargeActive && adapterPresent {
             return "exclamationmark.triangle.fill"
         }
+        if status.lowPowerModeEnabled {
+            return "battery.25percent"
+        }
         let charge     = Int(status.currentCharge)
         let limit      = Int(status.chargeLimit)
         let nearLimit  = charge >= max(limit - 1, 0)
@@ -131,7 +153,6 @@ private struct StatusIconLabel: View {
 
 struct AppMenuView: View {
     @ObservedObject var client: DaemonClient
-    @Binding var isMenuOpen: Bool
     @State private var debugUnlocked: Bool = false
 
     var body: some View {
@@ -169,8 +190,6 @@ struct AppMenuView: View {
         }
         .padding(12)
         .frame(width: 320)
-        .onAppear { isMenuOpen = true }
-        .onDisappear { isMenuOpen = false }
     }
 }
 
@@ -561,8 +580,7 @@ extension ControlsView {
                 let value = Int($0)
                 client.userIntent.chargeLimit = value
                 if value < 100 {
-                    client.userIntent.preferredChargeLimit = value
-                    UserDefaults.standard.set(value, forKey: "preferredChargeLimit")
+                    client.setPreferredChargeLimit(value)
                 }
             }
         )
@@ -717,21 +735,38 @@ struct QuickActionsView: View {
                 }
             )
 
-            MultiStateActionButton<MenuBarDisplayStyle>(
-                title: "Icons",
+            MultiStateActionButton<Bool>(
+                title: "Low Power",
                 states: [
-                    ActionState(value: .iconAndText, imageName: "circle.grid.2x1.fill", tint: .green, help: "Menu bar (Icon + Text)"),
-                    ActionState(value: .iconOnly, imageName: "circle.grid.2x1.left.filled", tint: .yellow, help: "Menu bar (Icon Only)"),
-                    ActionState(value: .textOnly, imageName: "circle.grid.2x1.right.filled", tint: .red, help: "Menu bar (Text Only)")
+                    ActionState(
+                        value: false,
+                        imageName: "battery.100percent",
+                        tint: nil,
+                        help: "Low Power Mode off",
+                        accessibilityLabel: "Low Power Mode Off"
+                    ),
+                    ActionState(
+                        value: true,
+                        imageName: "battery.25percent",
+                        tint: .orange,
+                        help: "Low Power Mode on",
+                        accessibilityLabel: "Low Power Mode On"
+                    )
                 ],
-                selection: $client.userIntent.menuBarDisplayStyle,
+                selection: Binding<Bool>(
+                    get: { client.status?.lowPowerModeEnabled ?? false },
+                    set: { _ in }
+                ),
                 size: 48,
                 enableHaptics: true,
                 showsCaption: false,
-                isActiveProvider: { _ in true },
-                onChange: { _ in }
+                isActiveProvider: { $0 },
+                onChange: { isOn in
+                    Task { await client.setPowerFeature(feature: .lowPowerMode, enable: isOn) }
+                }
             )
-            .id(client.userIntent.menuBarDisplayStyle.rawValue)
+            .disabled(!(status.lowPowerModeAvailable))
+            .opacity(status.lowPowerModeAvailable ? 1.0 : 0.45)
         }
         .padding(.vertical, 4)
     }
@@ -813,6 +848,18 @@ struct FooterActionsView: View {
                             )
                         }
 
+                        Menu("Menu Bar Style") {
+                            Button("Icon + Text") {
+                                client.setMenuBarDisplayStyle(.iconAndText)
+                            }
+                            Button("Icon Only") {
+                                client.setMenuBarDisplayStyle(.iconOnly)
+                            }
+                            Button("Text Only") {
+                                client.setMenuBarDisplayStyle(.textOnly)
+                            }
+                        }
+
                         Toggle("Prevent System Sleep", isOn: $client.userIntent.preventSystemSleep)
                             .disabled(client.userIntent.preventDisplaySleep)
                             .onChange(of: client.userIntent.preventSystemSleep) { _, newValue in
@@ -839,12 +886,7 @@ struct FooterActionsView: View {
                             }
 
                         Menu("Low Power") {
-                            // Low Power Mode (reflect actual system state)
-                            // Available from macOS 12.0+
-                            let lpmAvailable: Bool = {
-                                if #available(macOS 12.0, *) { return true } else { return false }
-                            }()
-                            if lpmAvailable {
+                            if client.status?.lowPowerModeAvailable ?? false {
                                 Toggle(
                                     "Low Power Mode",
                                     isOn: Binding<Bool>(

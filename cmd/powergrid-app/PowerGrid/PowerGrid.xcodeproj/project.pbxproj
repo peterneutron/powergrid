@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 77;
+	objectVersion = 63;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -51,7 +51,7 @@
 		193F923134B2208BEBC49F54 /* Notifications.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Notifications.swift; sourceTree = "<group>"; };
 		1B0E38C66962EBB68AD6CEBD /* powergrid.grpc.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = powergrid.grpc.swift; sourceTree = "<group>"; };
 		257719E273DB29783563FC40 /* PowerGrid.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PowerGrid.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		2C14D5A1FCD4ADD9949D52B1 /* .gitkeep */ = {isa = PBXFileReference; path = .gitkeep; sourceTree = "<group>"; };
+		2C14D5A1FCD4ADD9949D52B1 /* .gitkeep */ = {isa = PBXFileReference; lastKnownFileType = text; path = .gitkeep; sourceTree = "<group>"; };
 		34DA044372F80884D84038B0 /* DaemonClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DaemonClient.swift; sourceTree = "<group>"; };
 		48BF93C61204E4A3ADFAD6B6 /* RulesEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RulesEngine.swift; sourceTree = "<group>"; };
 		52D4F08E46D4800B2B1E4F1C /* PowerGridUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PowerGridUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -270,7 +270,6 @@
 						ProvisioningStyle = Automatic;
 					};
 					4EB65F118FC6F6002695DEF6 = {
-						DevelopmentTeam = "$(POWERGRID_DEVELOPMENT_TEAM)";
 						ProvisioningStyle = Automatic;
 					};
 					C156C374EC8B50BC08E208EE = {
@@ -297,7 +296,6 @@
 				9F5F0B5FF598D4B1C16DBBEE /* XCRemoteSwiftPackageReference "swift-nio" */,
 				C37CC54177F11922456730EB /* XCRemoteSwiftPackageReference "swift-protobuf" */,
 			);
-			preferredProjectObjectVersion = 77;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -330,6 +328,7 @@
 			inputPaths = (
 				"${SRCROOT}/../../../cmd/powergrid-daemon/main.go",
 				"${SRCROOT}/../../../cmd/powergrid-helper/main.go",
+				"${SRCROOT}/../../../cmd/powergridctl/main.go",
 				"${SRCROOT}/../../../go.mod",
 				"${SRCROOT}/../../../go.sum",
 				"${SRCROOT}/../../../scripts/build-go.sh",
@@ -340,6 +339,7 @@
 			outputPaths = (
 				"$(DERIVED_FILE_DIR)/powergrid-go/powergrid-daemon",
 				"$(DERIVED_FILE_DIR)/powergrid-go/powergrid-helper",
+				"$(DERIVED_FILE_DIR)/powergrid-go/powergridctl",
 				"$(DERIVED_FILE_DIR)/powergrid-go/powergrid-daemon.buildid",
 				"$(DERIVED_FILE_DIR)/powergrid-go/powergrid-daemon.buildmeta",
 			);
@@ -358,6 +358,7 @@
 			inputPaths = (
 				"$(DERIVED_FILE_DIR)/powergrid-go/powergrid-daemon",
 				"$(DERIVED_FILE_DIR)/powergrid-go/powergrid-helper",
+				"$(DERIVED_FILE_DIR)/powergrid-go/powergridctl",
 				"$(DERIVED_FILE_DIR)/powergrid-go/powergrid-daemon.buildid",
 				"${SRCROOT}/../../../install/com.neutronstar.powergrid.daemon.plist",
 			);
@@ -367,12 +368,13 @@
 			outputPaths = (
 				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/powergrid-daemon",
 				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/powergrid-helper",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/powergridctl",
 				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/powergrid-daemon.buildid",
 				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/com.neutronstar.powergrid.daemon.plist",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/zsh;
-			shellScript = "set -euo pipefail\nDEST=\"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}\"\nmkdir -p \"${DEST}\"\ncp \"${DERIVED_FILE_DIR}/powergrid-go/powergrid-daemon\" \"${DEST}/powergrid-daemon\"\ncp \"${DERIVED_FILE_DIR}/powergrid-go/powergrid-helper\" \"${DEST}/powergrid-helper\"\ncp \"${DERIVED_FILE_DIR}/powergrid-go/powergrid-daemon.buildid\" \"${DEST}/powergrid-daemon.buildid\"\ncp \"${SRCROOT}/../../../install/com.neutronstar.powergrid.daemon.plist\" \"${DEST}/com.neutronstar.powergrid.daemon.plist\"\n";
+			shellScript = "set -euo pipefail\nDEST=\"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}\"\nmkdir -p \"${DEST}\"\ncp \"${DERIVED_FILE_DIR}/powergrid-go/powergrid-daemon\" \"${DEST}/powergrid-daemon\"\ncp \"${DERIVED_FILE_DIR}/powergrid-go/powergrid-helper\" \"${DEST}/powergrid-helper\"\ncp \"${DERIVED_FILE_DIR}/powergrid-go/powergridctl\" \"${DEST}/powergridctl\"\ncp \"${DERIVED_FILE_DIR}/powergrid-go/powergrid-daemon.buildid\" \"${DEST}/powergrid-daemon.buildid\"\ncp \"${SRCROOT}/../../../install/com.neutronstar.powergrid.daemon.plist\" \"${DEST}/com.neutronstar.powergrid.daemon.plist\"\n";
 			showEnvVarsInLog = 0;
 		};
 /* End PBXShellScriptBuildPhase section */
@@ -518,9 +520,11 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CODE_SIGN_ENTITLEMENTS = PowerGrid/PowerGrid.entitlements;
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = "";
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = PowerGrid/Info.plist;
@@ -680,9 +684,11 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CODE_SIGN_ENTITLEMENTS = PowerGrid/PowerGrid.entitlements;
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = "";
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = PowerGrid/Info.plist;
