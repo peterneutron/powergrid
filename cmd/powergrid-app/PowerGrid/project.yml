@@ -47,13 +47,13 @@ targets:
     platform: macOS
     deploymentTarget: "15.5"
     sources:
-      - path: cmd/powergrid-app/PowerGrid/PowerGrid
+      - path: PowerGrid
         excludes:
           - Info.plist
     resources:
     configFiles:
-      Debug: cmd/powergrid-app/PowerGrid/Config/Base.xcconfig
-      Release: cmd/powergrid-app/PowerGrid/Config/Base.xcconfig
+      Debug: Config/Base.xcconfig
+      Release: Config/Base.xcconfig
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.neutronstar.PowerGrid
@@ -134,7 +134,7 @@ targets:
     platform: macOS
     deploymentTarget: "15.5"
     sources:
-      - path: cmd/powergrid-app/PowerGrid/PowerGridTests
+      - path: PowerGridTests
     dependencies:
       - target: PowerGrid
     settings:
@@ -152,7 +152,7 @@ targets:
     platform: macOS
     deploymentTarget: "15.5"
     sources:
-      - path: cmd/powergrid-app/PowerGrid/PowerGridUITests
+      - path: PowerGridUITests
     dependencies:
       - target: PowerGrid
     settings:

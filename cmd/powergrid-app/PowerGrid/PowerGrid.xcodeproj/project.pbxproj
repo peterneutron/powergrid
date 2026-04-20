@@ -7,25 +7,25 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		02B38D354395FD202D2A7CB6 /* QuickActionButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC83CDF55ACF8B8E9383C53D /* QuickActionButton.swift */; };
-		29CC46D0A141EEF33F6D3EE1 /* Settings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7FA8BDC536537D0916F11089 /* Settings.swift */; };
+		30F397FC6D02D9C482403370 /* RulesEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9029196320DBD309B37C3DF /* RulesEngine.swift */; };
 		36247FEC2E735EFE452C3517 /* GRPCProtobuf in Frameworks */ = {isa = PBXBuildFile; productRef = 888E8934CE8EAD46D4E6DAA5 /* GRPCProtobuf */; };
+		3726D8C3D6CD45309F68CD7C /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 56E78744EFB33B46D4A5A2B5 /* Assets.xcassets */; };
 		375BFEAFD439DC1C826C0E26 /* GRPCNIOTransportHTTP2 in Frameworks */ = {isa = PBXBuildFile; productRef = 0F271E3EA3A6383E1592DDB8 /* GRPCNIOTransportHTTP2 */; };
-		3B90AD79E3D46BAE42785910 /* PowerGridTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68D206DFEA8879861D1552CF /* PowerGridTests.swift */; };
-		4F0E7D99D7B3F53796C62810 /* Notifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = 193F923134B2208BEBC49F54 /* Notifications.swift */; };
-		779A6C33C54593E1CEEA4CCE /* powergrid.grpc.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B0E38C66962EBB68AD6CEBD /* powergrid.grpc.swift */; };
-		77A2F89D0029ACE235F7F96B /* powergrid.pb.swift in Sources */ = {isa = PBXBuildFile; fileRef = 119065394194890169BAD60E /* powergrid.pb.swift */; };
+		45429AF9CFCBB2C212263235 /* DaemonClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9EB93DC69AF92E057986CC50 /* DaemonClient.swift */; };
+		48197894CF4B58C8163F54E2 /* powergrid.grpc.swift in Sources */ = {isa = PBXBuildFile; fileRef = EED0801A06EFD22354C2C52F /* powergrid.grpc.swift */; };
+		48A6D55FF46CB350C0101D9F /* PowerGridTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC82ACB61B9837C5CF1E7005 /* PowerGridTests.swift */; };
+		50FEF02459540073C6DD083D /* Notifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C90444A378589C784950DA9 /* Notifications.swift */; };
+		62CEE2148803E2BEB87B6032 /* PowerGridUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31BBF6D06A3A0C8C269D442F /* PowerGridUITests.swift */; };
+		7B89646C75BCB37A81AF991B /* QuickActionButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BE8ABB444032EF8E35E84DC /* QuickActionButton.swift */; };
 		7C16C62621324AF953B191C7 /* GRPCCore in Frameworks */ = {isa = PBXBuildFile; productRef = B8ECDB6E4334FB614252F46C /* GRPCCore */; };
 		85CE20B84447F5A8764AB4C7 /* SwiftProtobuf in Frameworks */ = {isa = PBXBuildFile; productRef = F36B877692413BA5A91D1F5C /* SwiftProtobuf */; };
-		A05D4870B0B3ED1AB80FCEF0 /* PowerGridApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56109FE14BA13C250E3F1589 /* PowerGridApp.swift */; };
-		A588B59E7243C80CCB7E8A41 /* DaemonClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34DA044372F80884D84038B0 /* DaemonClient.swift */; };
-		A9F5E8912B02A591D8ED2982 /* PowerGridUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D49DAF3E3E52745912183BA1 /* PowerGridUITestsLaunchTests.swift */; };
-		C453857ACBD723073195DB23 /* TimeEstimation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A6004AF76FD23A14CA28362 /* TimeEstimation.swift */; };
-		C4ACE00292054D0557484F2F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B8CB52210950BBF205D7ECA3 /* Assets.xcassets */; };
-		CC5A48F592C11CCF7E15C5A7 /* RulesEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48BF93C61204E4A3ADFAD6B6 /* RulesEngine.swift */; };
+		96B83073A7D90207D519CA8B /* powergrid.pb.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7A90D6D5517C2979F72552E /* powergrid.pb.swift */; };
+		B6471797EA2A87DAAD742237 /* PowerGridUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54C6D8F9ABDCB05EF2108A80 /* PowerGridUITestsLaunchTests.swift */; };
+		B6EE485CF929C5336E553290 /* TimeEstimation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 836BCF5B68D829572E180F46 /* TimeEstimation.swift */; };
 		E4DA3057EB8E1CCE973E1578 /* GRPCInProcessTransport in Frameworks */ = {isa = PBXBuildFile; productRef = 62515A9165DFAB7818F0A845 /* GRPCInProcessTransport */; };
 		E6E455BF2A00DD281A54F3C6 /* NIOCore in Frameworks */ = {isa = PBXBuildFile; productRef = CBDF251491F443289EA8E587 /* NIOCore */; };
-		E77529412BB7A883FB646BF8 /* PowerGridUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC9E8E7AF8579902057CF915 /* PowerGridUITests.swift */; };
+		F5085199BB624DDEF6116476 /* Settings.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB652CC10BB0659BBC7609A3 /* Settings.swift */; };
+		F858B95714D4B28010836C45 /* PowerGridApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 566CC142DAF8A95824193605 /* PowerGridApp.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -46,25 +46,25 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		0BF85E725E8EB5F78E6831B2 /* Base.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Base.xcconfig; sourceTree = "<group>"; };
-		119065394194890169BAD60E /* powergrid.pb.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = powergrid.pb.swift; sourceTree = "<group>"; };
-		193F923134B2208BEBC49F54 /* Notifications.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Notifications.swift; sourceTree = "<group>"; };
-		1B0E38C66962EBB68AD6CEBD /* powergrid.grpc.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = powergrid.grpc.swift; sourceTree = "<group>"; };
 		257719E273DB29783563FC40 /* PowerGrid.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PowerGrid.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		2C14D5A1FCD4ADD9949D52B1 /* .gitkeep */ = {isa = PBXFileReference; path = .gitkeep; sourceTree = "<group>"; };
-		34DA044372F80884D84038B0 /* DaemonClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DaemonClient.swift; sourceTree = "<group>"; };
-		48BF93C61204E4A3ADFAD6B6 /* RulesEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RulesEngine.swift; sourceTree = "<group>"; };
+		2BE8ABB444032EF8E35E84DC /* QuickActionButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickActionButton.swift; sourceTree = "<group>"; };
+		31BBF6D06A3A0C8C269D442F /* PowerGridUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PowerGridUITests.swift; sourceTree = "<group>"; };
 		52D4F08E46D4800B2B1E4F1C /* PowerGridUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PowerGridUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		56109FE14BA13C250E3F1589 /* PowerGridApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PowerGridApp.swift; sourceTree = "<group>"; };
-		5A6004AF76FD23A14CA28362 /* TimeEstimation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimeEstimation.swift; sourceTree = "<group>"; };
-		68D206DFEA8879861D1552CF /* PowerGridTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PowerGridTests.swift; sourceTree = "<group>"; };
-		7FA8BDC536537D0916F11089 /* Settings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Settings.swift; sourceTree = "<group>"; };
-		B3649155D17482CA65711FDA /* PowerGrid.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PowerGrid.entitlements; sourceTree = "<group>"; };
-		B8CB52210950BBF205D7ECA3 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
-		CC83CDF55ACF8B8E9383C53D /* QuickActionButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickActionButton.swift; sourceTree = "<group>"; };
-		D49DAF3E3E52745912183BA1 /* PowerGridUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PowerGridUITestsLaunchTests.swift; sourceTree = "<group>"; };
+		54C6D8F9ABDCB05EF2108A80 /* PowerGridUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PowerGridUITestsLaunchTests.swift; sourceTree = "<group>"; };
+		566CC142DAF8A95824193605 /* PowerGridApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PowerGridApp.swift; sourceTree = "<group>"; };
+		56E78744EFB33B46D4A5A2B5 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		69F429E0BE0751D9045BA31A /* Base.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Base.xcconfig; sourceTree = "<group>"; };
+		7C90444A378589C784950DA9 /* Notifications.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Notifications.swift; sourceTree = "<group>"; };
+		836BCF5B68D829572E180F46 /* TimeEstimation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimeEstimation.swift; sourceTree = "<group>"; };
+		9EB93DC69AF92E057986CC50 /* DaemonClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DaemonClient.swift; sourceTree = "<group>"; };
+		A7A90D6D5517C2979F72552E /* powergrid.pb.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = powergrid.pb.swift; sourceTree = "<group>"; };
+		B6419F8B77E2DF787A1FC429 /* PowerGrid.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PowerGrid.entitlements; sourceTree = "<group>"; };
 		D5817668980061BED52C7FE2 /* PowerGridTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PowerGridTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		FC9E8E7AF8579902057CF915 /* PowerGridUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PowerGridUITests.swift; sourceTree = "<group>"; };
+		DB0743A5DC613F3613A8C884 /* .gitkeep */ = {isa = PBXFileReference; path = .gitkeep; sourceTree = "<group>"; };
+		DC82ACB61B9837C5CF1E7005 /* PowerGridTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PowerGridTests.swift; sourceTree = "<group>"; };
+		EB652CC10BB0659BBC7609A3 /* Settings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Settings.swift; sourceTree = "<group>"; };
+		EED0801A06EFD22354C2C52F /* powergrid.grpc.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = powergrid.grpc.swift; sourceTree = "<group>"; };
+		F9029196320DBD309B37C3DF /* RulesEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RulesEngine.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -84,31 +84,41 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		0DF8AD9C8F7B577B0A393490 /* rpc */ = {
+			isa = PBXGroup;
+			children = (
+				DB0743A5DC613F3613A8C884 /* .gitkeep */,
+				EED0801A06EFD22354C2C52F /* powergrid.grpc.swift */,
+				A7A90D6D5517C2979F72552E /* powergrid.pb.swift */,
+			);
+			path = rpc;
+			sourceTree = "<group>";
+		};
+		0EDAD57100E56D4E5180E577 /* PowerGridTests */ = {
+			isa = PBXGroup;
+			children = (
+				DC82ACB61B9837C5CF1E7005 /* PowerGridTests.swift */,
+			);
+			path = PowerGridTests;
+			sourceTree = "<group>";
+		};
 		20B33861DC251D45B0FCF402 = {
 			isa = PBXGroup;
 			children = (
-				817D837193B15D13725261B5 /* cmd */,
+				43E8CF45D2B185169321979F /* Config */,
+				AAC1B1FD6E11F9994E5B7103 /* PowerGrid */,
+				0EDAD57100E56D4E5180E577 /* PowerGridTests */,
+				FC0A127A27F66FB022C329D1 /* PowerGridUITests */,
 				57BECC80F9FB2520E1B6EED1 /* Products */,
 			);
 			sourceTree = "<group>";
 		};
-		25B7890D4B02ABFA96780A5D /* PowerGrid */ = {
+		43E8CF45D2B185169321979F /* Config */ = {
 			isa = PBXGroup;
 			children = (
-				E1DDF7FFFA5A8C1648B3F8C5 /* Config */,
-				EC34065E0ACBC11E21504357 /* PowerGrid */,
-				2B625D818226D5DBDA97535D /* PowerGridTests */,
-				A4E649DDE2E0510E72A90953 /* PowerGridUITests */,
+				69F429E0BE0751D9045BA31A /* Base.xcconfig */,
 			);
-			path = PowerGrid;
-			sourceTree = "<group>";
-		};
-		2B625D818226D5DBDA97535D /* PowerGridTests */ = {
-			isa = PBXGroup;
-			children = (
-				68D206DFEA8879861D1552CF /* PowerGridTests.swift */,
-			);
-			path = PowerGridTests;
+			path = Config;
 			sourceTree = "<group>";
 		};
 		57BECC80F9FB2520E1B6EED1 /* Products */ = {
@@ -121,73 +131,38 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
-		5D01D19184569A83D4CB34CB /* internal */ = {
+		AAC1B1FD6E11F9994E5B7103 /* PowerGrid */ = {
 			isa = PBXGroup;
 			children = (
-				BD85E68BA5CA1CA4562DD887 /* rpc */,
+				FA6CA5E11CA8C76EB450FACB /* internal */,
+				56E78744EFB33B46D4A5A2B5 /* Assets.xcassets */,
+				9EB93DC69AF92E057986CC50 /* DaemonClient.swift */,
+				7C90444A378589C784950DA9 /* Notifications.swift */,
+				B6419F8B77E2DF787A1FC429 /* PowerGrid.entitlements */,
+				566CC142DAF8A95824193605 /* PowerGridApp.swift */,
+				2BE8ABB444032EF8E35E84DC /* QuickActionButton.swift */,
+				F9029196320DBD309B37C3DF /* RulesEngine.swift */,
+				EB652CC10BB0659BBC7609A3 /* Settings.swift */,
+				836BCF5B68D829572E180F46 /* TimeEstimation.swift */,
+			);
+			path = PowerGrid;
+			sourceTree = "<group>";
+		};
+		FA6CA5E11CA8C76EB450FACB /* internal */ = {
+			isa = PBXGroup;
+			children = (
+				0DF8AD9C8F7B577B0A393490 /* rpc */,
 			);
 			path = internal;
 			sourceTree = "<group>";
 		};
-		817D837193B15D13725261B5 /* cmd */ = {
+		FC0A127A27F66FB022C329D1 /* PowerGridUITests */ = {
 			isa = PBXGroup;
 			children = (
-				C9196F16B318C18D9575D526 /* powergrid-app */,
-			);
-			name = cmd;
-			path = ../..;
-			sourceTree = "<group>";
-		};
-		A4E649DDE2E0510E72A90953 /* PowerGridUITests */ = {
-			isa = PBXGroup;
-			children = (
-				FC9E8E7AF8579902057CF915 /* PowerGridUITests.swift */,
-				D49DAF3E3E52745912183BA1 /* PowerGridUITestsLaunchTests.swift */,
+				31BBF6D06A3A0C8C269D442F /* PowerGridUITests.swift */,
+				54C6D8F9ABDCB05EF2108A80 /* PowerGridUITestsLaunchTests.swift */,
 			);
 			path = PowerGridUITests;
-			sourceTree = "<group>";
-		};
-		BD85E68BA5CA1CA4562DD887 /* rpc */ = {
-			isa = PBXGroup;
-			children = (
-				2C14D5A1FCD4ADD9949D52B1 /* .gitkeep */,
-				1B0E38C66962EBB68AD6CEBD /* powergrid.grpc.swift */,
-				119065394194890169BAD60E /* powergrid.pb.swift */,
-			);
-			path = rpc;
-			sourceTree = "<group>";
-		};
-		C9196F16B318C18D9575D526 /* powergrid-app */ = {
-			isa = PBXGroup;
-			children = (
-				25B7890D4B02ABFA96780A5D /* PowerGrid */,
-			);
-			path = "powergrid-app";
-			sourceTree = "<group>";
-		};
-		E1DDF7FFFA5A8C1648B3F8C5 /* Config */ = {
-			isa = PBXGroup;
-			children = (
-				0BF85E725E8EB5F78E6831B2 /* Base.xcconfig */,
-			);
-			path = Config;
-			sourceTree = "<group>";
-		};
-		EC34065E0ACBC11E21504357 /* PowerGrid */ = {
-			isa = PBXGroup;
-			children = (
-				5D01D19184569A83D4CB34CB /* internal */,
-				B8CB52210950BBF205D7ECA3 /* Assets.xcassets */,
-				34DA044372F80884D84038B0 /* DaemonClient.swift */,
-				193F923134B2208BEBC49F54 /* Notifications.swift */,
-				B3649155D17482CA65711FDA /* PowerGrid.entitlements */,
-				56109FE14BA13C250E3F1589 /* PowerGridApp.swift */,
-				CC83CDF55ACF8B8E9383C53D /* QuickActionButton.swift */,
-				48BF93C61204E4A3ADFAD6B6 /* RulesEngine.swift */,
-				7FA8BDC536537D0916F11089 /* Settings.swift */,
-				5A6004AF76FD23A14CA28362 /* TimeEstimation.swift */,
-			);
-			path = PowerGrid;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -281,7 +256,6 @@
 				};
 			};
 			buildConfigurationList = 08BA206E2CFF81010C272160 /* Build configuration list for PBXProject "PowerGrid" */;
-			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -298,6 +272,7 @@
 				C37CC54177F11922456730EB /* XCRemoteSwiftPackageReference "swift-protobuf" */,
 			);
 			preferredProjectObjectVersion = 77;
+			productRefGroup = 57BECC80F9FB2520E1B6EED1 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -313,7 +288,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				C4ACE00292054D0557484F2F /* Assets.xcassets in Resources */,
+				3726D8C3D6CD45309F68CD7C /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -386,15 +361,15 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				A588B59E7243C80CCB7E8A41 /* DaemonClient.swift in Sources */,
-				4F0E7D99D7B3F53796C62810 /* Notifications.swift in Sources */,
-				A05D4870B0B3ED1AB80FCEF0 /* PowerGridApp.swift in Sources */,
-				02B38D354395FD202D2A7CB6 /* QuickActionButton.swift in Sources */,
-				CC5A48F592C11CCF7E15C5A7 /* RulesEngine.swift in Sources */,
-				29CC46D0A141EEF33F6D3EE1 /* Settings.swift in Sources */,
-				C453857ACBD723073195DB23 /* TimeEstimation.swift in Sources */,
-				779A6C33C54593E1CEEA4CCE /* powergrid.grpc.swift in Sources */,
-				77A2F89D0029ACE235F7F96B /* powergrid.pb.swift in Sources */,
+				45429AF9CFCBB2C212263235 /* DaemonClient.swift in Sources */,
+				50FEF02459540073C6DD083D /* Notifications.swift in Sources */,
+				F858B95714D4B28010836C45 /* PowerGridApp.swift in Sources */,
+				7B89646C75BCB37A81AF991B /* QuickActionButton.swift in Sources */,
+				30F397FC6D02D9C482403370 /* RulesEngine.swift in Sources */,
+				F5085199BB624DDEF6116476 /* Settings.swift in Sources */,
+				B6EE485CF929C5336E553290 /* TimeEstimation.swift in Sources */,
+				48197894CF4B58C8163F54E2 /* powergrid.grpc.swift in Sources */,
+				96B83073A7D90207D519CA8B /* powergrid.pb.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -402,7 +377,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				3B90AD79E3D46BAE42785910 /* PowerGridTests.swift in Sources */,
+				48A6D55FF46CB350C0101D9F /* PowerGridTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -410,8 +385,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				E77529412BB7A883FB646BF8 /* PowerGridUITests.swift in Sources */,
-				A9F5E8912B02A591D8ED2982 /* PowerGridUITestsLaunchTests.swift in Sources */,
+				62CEE2148803E2BEB87B6032 /* PowerGridUITests.swift in Sources */,
+				B6471797EA2A87DAAD742237 /* PowerGridUITestsLaunchTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -464,7 +439,7 @@
 		};
 		4A584E47972E999E9A5A0E9E /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 0BF85E725E8EB5F78E6831B2 /* Base.xcconfig */;
+			baseConfigurationReference = 69F429E0BE0751D9045BA31A /* Base.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -547,7 +522,7 @@
 		};
 		F5490FE31DE0D80E98CBF022 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 0BF85E725E8EB5F78E6831B2 /* Base.xcconfig */;
+			baseConfigurationReference = 69F429E0BE0751D9045BA31A /* Base.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
