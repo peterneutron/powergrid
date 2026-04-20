@@ -38,6 +38,8 @@ Common local targets:
 - `make swift-test`
 - `make build`
 
+`make proto` will build and cache the pinned gRPC Swift generator automatically on first use.
+
 ## Docs
 
 Keep the README short. Detailed material lives elsewhere:
