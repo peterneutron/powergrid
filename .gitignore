@@ -59,7 +59,6 @@ xcuserdata/
 *.trace
 repomix-output.xml
 temporary.md
-AGENTS.md
 cmd/powergrid-app/PowerGrid/Config/Signing.local.xcconfig
 
 # Caches
