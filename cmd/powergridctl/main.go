@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -12,6 +13,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	grpcstatus "google.golang.org/grpc/status"
 
@@ -19,9 +21,15 @@ import (
 )
 
 const (
-	socketPath  = "/var/run/powergrid.sock"
-	dialTimeout = 3 * time.Second
-	rpcTimeout  = 5 * time.Second
+	socketPath   = "/var/run/powergrid.sock"
+	dialTimeout  = 3 * time.Second
+	rpcTimeout   = 5 * time.Second
+	actionGet    = "get"
+	stateOff     = "off"
+	stateOn      = "on"
+	sleepSystem  = "system"
+	sleepDisplay = "display"
+	usageText    = "powergridctl: control PowerGrid through the local daemon\n\nUsage:\n  powergridctl status\n  powergridctl limit [60-100|off]\n  powergridctl lowpower [get|on|off|toggle]\n  powergridctl discharge [get|on|off]\n  powergridctl sleep [get|off|system|display]\n  powergridctl help\n"
 )
 
 type commandClient struct {
@@ -34,24 +42,32 @@ func main() {
 
 func run(args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
-		printUsage(stdout)
+		if err := printUsage(stdout); err != nil {
+			_ = writeLine(stderr, err.Error())
+			return 1
+		}
 		return 0
 	}
 
 	if args[0] == "help" {
-		printUsage(stdout)
+		if err := printUsage(stdout); err != nil {
+			_ = writeLine(stderr, err.Error())
+			return 1
+		}
 		return 0
 	}
 
 	conn, client, err := newCommandClient()
 	if err != nil {
-		fmt.Fprintln(stderr, formatCommandError(err))
+		_ = writeLine(stderr, formatCommandError(err))
 		return 1
 	}
-	defer conn.Close()
+	defer func() {
+		_ = conn.Close()
+	}()
 
 	if err := dispatch(client, args, stdout); err != nil {
-		fmt.Fprintln(stderr, formatCommandError(err))
+		_ = writeLine(stderr, formatCommandError(err))
 		return 1
 	}
 
@@ -66,18 +82,38 @@ func newCommandClient() (*grpc.ClientConn, *commandClient, error) {
 		return (&net.Dialer{}).DialContext(ctx, "unix", socketPath)
 	}
 
-	conn, err := grpc.DialContext(
-		ctx,
+	conn, err := grpc.NewClient(
 		"passthrough:///powergrid",
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithContextDialer(dialer),
-		grpc.WithBlock(),
 	)
 	if err != nil {
 		return nil, nil, err
 	}
+	if err := waitForReady(ctx, conn); err != nil {
+		_ = conn.Close()
+		return nil, nil, err
+	}
 
 	return conn, &commandClient{rpc: rpc.NewPowerGridClient(conn)}, nil
+}
+
+func waitForReady(ctx context.Context, conn *grpc.ClientConn) error {
+	conn.Connect()
+	for {
+		state := conn.GetState()
+		switch state {
+		case connectivity.Ready:
+			return nil
+		case connectivity.Idle:
+			conn.Connect()
+		case connectivity.Shutdown:
+			return errors.New("powergrid daemon connection shut down")
+		}
+		if !conn.WaitForStateChange(ctx, state) {
+			return ctx.Err()
+		}
+	}
 }
 
 func dispatch(client *commandClient, args []string, stdout io.Writer) error {
@@ -110,24 +146,26 @@ func handleStatus(client *commandClient, args []string, stdout io.Writer) error 
 		return err
 	}
 
-	fmt.Fprintf(stdout, "Charge: %d%%\n", status.GetCurrentCharge())
-	fmt.Fprintf(stdout, "Limit: %s\n", formatLimit(status.GetChargeLimit()))
-	fmt.Fprintf(stdout, "Charging: %s\n", formatBinaryState(status.GetIsCharging()))
-	fmt.Fprintf(stdout, "Connected: %s\n", formatBinaryState(status.GetIsConnected()))
-	fmt.Fprintf(stdout, "Force discharge: %s\n", formatBinaryState(status.GetForceDischargeActive()))
-	fmt.Fprintf(stdout, "Sleep mode: %s\n", sleepModeFromStatus(status))
-	fmt.Fprintf(stdout, "Low Power Mode: %s\n", lowPowerModeState(status))
-	return nil
+	return writef(
+		stdout,
+		"Charge: %d%%\nLimit: %s\nCharging: %s\nConnected: %s\nForce discharge: %s\nSleep mode: %s\nLow Power Mode: %s\n",
+		status.GetCurrentCharge(),
+		formatLimit(status.GetChargeLimit()),
+		formatBinaryState(status.GetIsCharging()),
+		formatBinaryState(status.GetIsConnected()),
+		formatBinaryState(status.GetForceDischargeActive()),
+		sleepModeFromStatus(status),
+		lowPowerModeState(status),
+	)
 }
 
 func handleLimit(client *commandClient, args []string, stdout io.Writer) error {
-	if len(args) == 0 || (len(args) == 1 && args[0] == "get") {
+	if len(args) == 0 || (len(args) == 1 && args[0] == actionGet) {
 		status, err := client.getStatus()
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(stdout, "Charge limit: %s\n", formatLimit(status.GetChargeLimit()))
-		return nil
+		return writef(stdout, "Charge limit: %s\n", formatLimit(status.GetChargeLimit()))
 	}
 	if len(args) != 1 {
 		return fmt.Errorf("usage: powergridctl limit [60-100|off]")
@@ -141,12 +179,11 @@ func handleLimit(client *commandClient, args []string, stdout io.Writer) error {
 		return err
 	}
 
-	fmt.Fprintf(stdout, "Charge limit set to %s.\n", formatLimit(limit))
-	return nil
+	return writef(stdout, "Charge limit set to %s.\n", formatLimit(limit))
 }
 
 func handleLowPower(client *commandClient, args []string, stdout io.Writer) error {
-	action := "get"
+	action := actionGet
 	if len(args) > 1 {
 		return fmt.Errorf("usage: powergridctl lowpower [get|on|off|toggle]")
 	}
@@ -160,19 +197,17 @@ func handleLowPower(client *commandClient, args []string, stdout io.Writer) erro
 	}
 
 	switch action {
-	case "get":
-		fmt.Fprintf(stdout, "Low Power Mode: %s\n", lowPowerModeState(status))
-		return nil
-	case "on", "off":
+	case actionGet:
+		return writef(stdout, "Low Power Mode: %s\n", lowPowerModeState(status))
+	case stateOn, stateOff:
 		if !status.GetLowPowerModeAvailable() {
 			return fmt.Errorf("low power mode is not available on this system")
 		}
-		enable := action == "on"
+		enable := action == stateOn
 		if err := client.setPowerFeature(rpc.PowerFeature_LOW_POWER_MODE, enable); err != nil {
 			return err
 		}
-		fmt.Fprintf(stdout, "Low Power Mode %s.\n", formatAppliedState(enable))
-		return nil
+		return writef(stdout, "Low Power Mode %s.\n", formatAppliedState(enable))
 	case "toggle":
 		if !status.GetLowPowerModeAvailable() {
 			return fmt.Errorf("low power mode is not available on this system")
@@ -181,15 +216,14 @@ func handleLowPower(client *commandClient, args []string, stdout io.Writer) erro
 		if err := client.setPowerFeature(rpc.PowerFeature_LOW_POWER_MODE, enable); err != nil {
 			return err
 		}
-		fmt.Fprintf(stdout, "Low Power Mode %s.\n", formatAppliedState(enable))
-		return nil
+		return writef(stdout, "Low Power Mode %s.\n", formatAppliedState(enable))
 	default:
 		return fmt.Errorf("usage: powergridctl lowpower [get|on|off|toggle]")
 	}
 }
 
 func handleDischarge(client *commandClient, args []string, stdout io.Writer) error {
-	action := "get"
+	action := actionGet
 	if len(args) > 1 {
 		return fmt.Errorf("usage: powergridctl discharge [get|on|off]")
 	}
@@ -198,27 +232,25 @@ func handleDischarge(client *commandClient, args []string, stdout io.Writer) err
 	}
 
 	switch action {
-	case "get":
+	case actionGet:
 		status, err := client.getStatus()
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(stdout, "Force discharge: %s\n", formatBinaryState(status.GetForceDischargeActive()))
-		return nil
-	case "on", "off":
-		enable := action == "on"
+		return writef(stdout, "Force discharge: %s\n", formatBinaryState(status.GetForceDischargeActive()))
+	case stateOn, stateOff:
+		enable := action == stateOn
 		if err := client.setPowerFeature(rpc.PowerFeature_FORCE_DISCHARGE, enable); err != nil {
 			return err
 		}
-		fmt.Fprintf(stdout, "Force discharge %s.\n", formatAppliedState(enable))
-		return nil
+		return writef(stdout, "Force discharge %s.\n", formatAppliedState(enable))
 	default:
 		return fmt.Errorf("usage: powergridctl discharge [get|on|off]")
 	}
 }
 
 func handleSleep(client *commandClient, args []string, stdout io.Writer) error {
-	action := "get"
+	action := actionGet
 	if len(args) > 1 {
 		return fmt.Errorf("usage: powergridctl sleep [get|off|system|display]")
 	}
@@ -227,40 +259,36 @@ func handleSleep(client *commandClient, args []string, stdout io.Writer) error {
 	}
 
 	switch action {
-	case "get":
+	case actionGet:
 		status, err := client.getStatus()
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(stdout, "Sleep mode: %s\n", sleepModeFromStatus(status))
-		return nil
-	case "off":
+		return writef(stdout, "Sleep mode: %s\n", sleepModeFromStatus(status))
+	case stateOff:
 		if err := client.setPowerFeature(rpc.PowerFeature_PREVENT_DISPLAY_SLEEP, false); err != nil {
 			return err
 		}
 		if err := client.setPowerFeature(rpc.PowerFeature_PREVENT_SYSTEM_SLEEP, false); err != nil {
 			return err
 		}
-		fmt.Fprintln(stdout, "Sleep mode set to off.")
-		return nil
-	case "system":
+		return writeLine(stdout, "Sleep mode set to off.")
+	case sleepSystem:
 		if err := client.setPowerFeature(rpc.PowerFeature_PREVENT_DISPLAY_SLEEP, false); err != nil {
 			return err
 		}
 		if err := client.setPowerFeature(rpc.PowerFeature_PREVENT_SYSTEM_SLEEP, true); err != nil {
 			return err
 		}
-		fmt.Fprintln(stdout, "Sleep mode set to system.")
-		return nil
-	case "display":
+		return writeLine(stdout, "Sleep mode set to system.")
+	case sleepDisplay:
 		if err := client.setPowerFeature(rpc.PowerFeature_PREVENT_SYSTEM_SLEEP, true); err != nil {
 			return err
 		}
 		if err := client.setPowerFeature(rpc.PowerFeature_PREVENT_DISPLAY_SLEEP, true); err != nil {
 			return err
 		}
-		fmt.Fprintln(stdout, "Sleep mode set to display.")
-		return nil
+		return writeLine(stdout, "Sleep mode set to display.")
 	default:
 		return fmt.Errorf("usage: powergridctl sleep [get|off|system|display]")
 	}
@@ -297,7 +325,7 @@ func (c *commandClient) setPowerFeature(feature rpc.PowerFeature, enable bool) e
 }
 
 func parseLimitValue(arg string) (int32, error) {
-	if strings.EqualFold(arg, "off") {
+	if strings.EqualFold(arg, stateOff) {
 		return 100, nil
 	}
 
@@ -320,9 +348,9 @@ func formatLimit(limit int32) string {
 
 func formatBinaryState(enabled bool) string {
 	if enabled {
-		return "on"
+		return stateOn
 	}
-	return "off"
+	return stateOff
 }
 
 func formatAppliedState(enabled bool) string {
@@ -335,11 +363,11 @@ func formatAppliedState(enabled bool) string {
 func sleepModeFromStatus(status *rpc.StatusResponse) string {
 	switch {
 	case status.GetPreventDisplaySleepActive():
-		return "display"
+		return sleepDisplay
 	case status.GetPreventSystemSleepActive():
-		return "system"
+		return sleepSystem
 	default:
-		return "off"
+		return stateOff
 	}
 }
 
@@ -348,9 +376,9 @@ func lowPowerModeState(status *rpc.StatusResponse) string {
 		return "not available"
 	}
 	if status.GetLowPowerModeEnabled() {
-		return "on"
+		return stateOn
 	}
-	return "off"
+	return stateOff
 }
 
 func formatCommandError(err error) string {
@@ -371,14 +399,17 @@ func formatCommandError(err error) string {
 	}
 }
 
-func printUsage(w io.Writer) {
-	fmt.Fprintln(w, "powergridctl: control PowerGrid through the local daemon")
-	fmt.Fprintln(w)
-	fmt.Fprintln(w, "Usage:")
-	fmt.Fprintln(w, "  powergridctl status")
-	fmt.Fprintln(w, "  powergridctl limit [60-100|off]")
-	fmt.Fprintln(w, "  powergridctl lowpower [get|on|off|toggle]")
-	fmt.Fprintln(w, "  powergridctl discharge [get|on|off]")
-	fmt.Fprintln(w, "  powergridctl sleep [get|off|system|display]")
-	fmt.Fprintln(w, "  powergridctl help")
+func printUsage(w io.Writer) error {
+	_, err := io.WriteString(w, usageText)
+	return err
+}
+
+func writef(w io.Writer, format string, args ...any) error {
+	_, err := fmt.Fprintf(w, format, args...)
+	return err
+}
+
+func writeLine(w io.Writer, text string) error {
+	_, err := io.WriteString(w, text+"\n")
+	return err
 }
