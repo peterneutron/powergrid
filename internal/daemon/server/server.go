@@ -29,11 +29,22 @@ const (
 	defaultChargeLimit = 80
 	logSubsystem       = "com.neutronstar.powergrid.daemon"
 	opTimeout          = 5 * time.Second
+	preSleepBudget     = 5 * time.Second
+	wakeHoldDuration   = 30 * time.Second
 	apiMajor           = uint32(1)
 	apiMinor           = uint32(0)
 )
 
 var logger = oslogger.NewLogger(logSubsystem, "Daemon")
+
+var (
+	streamSystemEventsFn = powerkit.StreamSystemEventsWithHooks
+	setChargingStateFn   = powerkit.SetChargingState
+	getSystemInfoFn      = func(opts ...powerkit.FetchOptions) (*powerkit.SystemInfo, error) {
+		return powerkit.GetSystemInfo(opts...)
+	}
+	nowFn = time.Now
+)
 
 type Daemon struct {
 	rpc.UnimplementedPowerGridServer
@@ -51,6 +62,8 @@ type Daemon struct {
 	wantPreventSystemSleep         bool
 	wantMagsafeLED                 bool
 	wantDisableChargingBeforeSleep bool
+	sleepTransitionActive          bool
+	wakeHoldUntil                  time.Time
 	ledSupported                   bool
 	lastLEDState                   powerkit.MagsafeLEDState
 	buildID                        string
@@ -102,8 +115,11 @@ func (s *Daemon) GetStatus(_ context.Context, _ *rpc.Empty) (*rpc.StatusResponse
 	resp.MagsafeLedControlActive = s.wantMagsafeLED
 	resp.MagsafeLedSupported = s.ledSupported
 	// Low Power Mode via powerkit-go (cached internally by the library)
-	if enabled, available, err := powerkit.GetLowPowerModeEnabled(); err == nil && available {
-		resp.LowPowerModeEnabled = enabled
+	if enabled, available, err := powerkit.GetLowPowerModeEnabled(); err == nil {
+		resp.LowPowerModeAvailable = available
+		if available {
+			resp.LowPowerModeEnabled = enabled
+		}
 	}
 	resp.DisableChargingBeforeSleepActive = s.wantDisableChargingBeforeSleep
 	// Battery details (best-effort; fields may not be available on all hardware)
@@ -166,13 +182,14 @@ func (s *Daemon) applySetChargeLimit(newLimit int32) error {
 		s.currentLimit = defaultChargeLimit
 	} else {
 		u := s.currentConsoleUser
-		if err := cfg.WriteUserChargeLimit(u.HomeDir, u.UID, int(newLimit)); err != nil {
+		if err := cfg.WriteUserChargeLimit(u.HomeDir, u.UID, u.GID, int(newLimit)); err != nil {
 			logger.Error("Failed to persist user charge limit for %s: %v", u.Username, err)
 		} else {
 			logger.Default("Persisted user charge limit %d%% for %s", newLimit, u.Username)
 		}
 		s.currentLimit = newLimit
 	}
+	s.reconcileSleepChargingStateLocked()
 
 	s.runChargingLogicLocked(nil)
 	return nil
@@ -227,7 +244,7 @@ func (s *Daemon) applyPowerFeature(feature rpc.PowerFeature, enable bool) error 
 		} else {
 			s.wantMagsafeLED = enable
 			if s.currentConsoleUser != nil {
-				_ = cfg.WriteUserMagsafeLED(s.currentConsoleUser.HomeDir, enable)
+				_ = cfg.WriteUserMagsafeLED(s.currentConsoleUser.HomeDir, s.currentConsoleUser.UID, s.currentConsoleUser.GID, enable)
 			}
 		}
 		s.mu.Unlock()
@@ -246,8 +263,9 @@ func (s *Daemon) applyPowerFeature(feature rpc.PowerFeature, enable bool) error 
 		s.mu.Lock()
 		s.wantDisableChargingBeforeSleep = enable
 		if s.currentConsoleUser != nil {
-			_ = cfg.WriteUserDisableChargingBeforeSleep(s.currentConsoleUser.HomeDir, enable)
+			_ = cfg.WriteUserDisableChargingBeforeSleep(s.currentConsoleUser.HomeDir, s.currentConsoleUser.UID, s.currentConsoleUser.GID, enable)
 		}
+		s.reconcileSleepChargingStateLocked()
 		s.mu.Unlock()
 	case rpc.PowerFeature_LOW_POWER_MODE:
 		// Use powerkit-go to set Low Power Mode (requires root; daemon runs as root)
@@ -348,6 +366,60 @@ func (s *Daemon) startBatteryCoalescer(ctx context.Context) {
 	}()
 }
 
+func (s *Daemon) reconcileSleepChargingStateLocked() {
+	if s.wantDisableChargingBeforeSleep && s.currentLimit < 100 {
+		return
+	}
+	if s.sleepTransitionActive || !s.wakeHoldUntil.IsZero() {
+		logger.Default("Clearing sleep-charging transition state because enforcement is disabled or limit is 100%%.")
+	}
+	s.sleepTransitionActive = false
+	s.wakeHoldUntil = time.Time{}
+}
+
+func (s *Daemon) updateCachedStatusLocked(info *powerkit.SystemInfo) {
+	if info == nil {
+		return
+	}
+	s.lastIOKitStatus = info.IOKit
+	s.lastSMCStatus = info.SMC
+
+	if info.IOKit != nil {
+		s.lastBatteryWattage = float32(info.IOKit.Calculations.BatteryPower)
+		s.lastAdapterWattage = float32(info.IOKit.Calculations.AdapterPower)
+		s.lastSystemWattage = float32(info.IOKit.Calculations.SystemPower)
+	}
+}
+
+func (s *Daemon) clearExpiredWakeHoldLocked(now time.Time) {
+	if s.wakeHoldUntil.IsZero() || now.Before(s.wakeHoldUntil) {
+		return
+	}
+	logger.Default("Wake hold expired; charging logic returned to normal.")
+	s.wakeHoldUntil = time.Time{}
+}
+
+func (s *Daemon) shouldSuppressChargingEnableLocked(charge, limit int, now time.Time) bool {
+	if s.sleepTransitionActive {
+		logger.Default("Suppressing charging enable during pre-sleep transition.")
+		return true
+	}
+
+	if s.wakeHoldUntil.IsZero() {
+		return false
+	}
+	if !now.Before(s.wakeHoldUntil) {
+		s.clearExpiredWakeHoldLocked(now)
+		return false
+	}
+	if charge >= limit {
+		logger.Default("Suppressing charging enable during wake hold (charge %d%% >= limit %d%%).", charge, limit)
+		return true
+	}
+
+	return false
+}
+
 func (s *Daemon) runChargingLogicLocked(info *powerkit.SystemInfo) {
 	var err error
 	if info == nil {
@@ -362,14 +434,7 @@ func (s *Daemon) runChargingLogicLocked(info *powerkit.SystemInfo) {
 		info.SMC = s.lastSMCStatus
 	}
 
-	s.lastIOKitStatus = info.IOKit
-	s.lastSMCStatus = info.SMC
-
-	if info.IOKit != nil {
-		s.lastBatteryWattage = float32(info.IOKit.Calculations.BatteryPower)
-		s.lastAdapterWattage = float32(info.IOKit.Calculations.AdapterPower)
-		s.lastSystemWattage = float32(info.IOKit.Calculations.SystemPower)
-	}
+	s.updateCachedStatusLocked(info)
 
 	if info.IOKit == nil || info.SMC == nil {
 		logger.Default("Skipping logic run due to incomplete data.")
@@ -379,21 +444,26 @@ func (s *Daemon) runChargingLogicLocked(info *powerkit.SystemInfo) {
 	charge := info.IOKit.Battery.CurrentCharge
 	limit := int(s.currentLimit)
 	isSMCChargingEnabled := info.SMC.State.IsChargingEnabled
+	now := nowFn()
+	s.clearExpiredWakeHoldLocked(now)
 
 	switch engine.DecideCharging(charge, limit, isSMCChargingEnabled) {
 	case engine.ChargingDisable:
 		logger.Default("Charge %d%% >= Limit %d%%. Disabling charging.", charge, limit)
 		if err := callWithTimeout(opTimeout, func() error {
-			return powerkit.SetChargingState(powerkit.ChargingActionOff)
+			return setChargingStateFn(powerkit.ChargingActionOff)
 		}); err != nil {
 			logger.Error("Failed to disable charging: %v", err)
 		} else {
 			logger.Default("Successfully disabled charging.")
 		}
 	case engine.ChargingEnable:
+		if s.shouldSuppressChargingEnableLocked(charge, limit, now) {
+			break
+		}
 		logger.Default("Charge %d%% < Limit %d%%. Re-enabling charging.", charge, limit)
 		if err := callWithTimeout(opTimeout, func() error {
-			return powerkit.SetChargingState(powerkit.ChargingActionOn)
+			return setChargingStateFn(powerkit.ChargingActionOn)
 		}); err != nil {
 			logger.Error("Failed to enable charging: %v", err)
 		} else {
@@ -406,9 +476,10 @@ func (s *Daemon) runChargingLogicLocked(info *powerkit.SystemInfo) {
 }
 
 func (s *Daemon) startEventStream(ctx context.Context) {
-	eventChan, err := powerkit.StreamSystemEvents()
+	eventChan, err := streamSystemEventsFn(powerkit.StreamHooks{BeforeSleep: s.handleBeforeSleep})
 	if err != nil {
 		logger.Error("FATAL: Failed to start powerkit event stream: %v", err)
+		return
 	}
 
 	logger.Default("Daemon event stream started. Watching for all power events.")
@@ -425,8 +496,9 @@ func (s *Daemon) startEventStream(ctx context.Context) {
 				}
 				switch event.Type {
 				case powerkit.EventTypeSystemWillSleep:
-					s.handleSleep()
+					logger.Default("Received informational system will sleep event after pre-sleep hook completion.")
 				case powerkit.EventTypeSystemDidWake:
+					s.handleWake()
 					logger.Default("System woke up. Re-evaluating state with backoff...")
 					s.wg.Add(1)
 					go func() {
@@ -539,6 +611,7 @@ func (s *Daemon) enterNoUser() {
 	s.wantMagsafeLED = profile.WantMagsafeLED
 	s.wantDisableChargingBeforeSleep = profile.WantDisableChargingBeforeSleep
 	s.currentLimit = int32(profile.Limit)
+	s.reconcileSleepChargingStateLocked()
 	s.mu.Unlock()
 
 	logger.Default("Entering NoUser state: clearing assertions, enabling adapter, applying system/effective limit")
@@ -568,6 +641,9 @@ func (s *Daemon) enterNoUser() {
 }
 
 func (s *Daemon) enterConsoleUser(u *consoleuser.ConsoleUser) {
+	if err := cfg.EnsureUserConfigOwnership(u.HomeDir, u.UID, u.GID); err != nil {
+		logger.Error("Failed to repair user config ownership for %s: %v", u.Username, err)
+	}
 	profile := session.ProfileForUser(u, defaultChargeLimit)
 
 	s.mu.Lock()
@@ -577,6 +653,7 @@ func (s *Daemon) enterConsoleUser(u *consoleuser.ConsoleUser) {
 	s.wantMagsafeLED = profile.WantMagsafeLED
 	s.wantDisableChargingBeforeSleep = profile.WantDisableChargingBeforeSleep
 	s.currentLimit = int32(profile.Limit)
+	s.reconcileSleepChargingStateLocked()
 	s.mu.Unlock()
 
 	logger.Default("Entering ConsoleUser state (%s): clearing assertions, enabling adapter, applying effective limit", u.Username)
@@ -599,22 +676,116 @@ func (s *Daemon) enterConsoleUser(u *consoleuser.ConsoleUser) {
 	go s.runChargingLogic(nil)
 }
 
-func (s *Daemon) handleSleep() {
-	s.mu.RLock()
-	shouldDisable := s.wantDisableChargingBeforeSleep
-	s.mu.RUnlock()
-	if !shouldDisable {
-		logger.Default("System is going to sleep. Skipping charging disable (user setting).")
+func (s *Daemon) handleBeforeSleep() {
+	s.mu.Lock()
+	enforce := s.wantDisableChargingBeforeSleep
+	limit := int(s.currentLimit)
+	if !enforce {
+		s.sleepTransitionActive = false
+		s.wakeHoldUntil = time.Time{}
+		s.mu.Unlock()
+		logger.Default("Pre-sleep charging hook skipped because Disable Charging before Sleep is off.")
 		return
 	}
-	logger.Default("System is going to sleep. Proactively disabling charging.")
-	if err := callWithTimeout(opTimeout, func() error {
-		return powerkit.SetChargingState(powerkit.ChargingActionOff)
-	}); err != nil {
-		logger.Error("Failed to disable charging for sleep: %v", err)
-	} else {
-		logger.Default("Successfully disabled charging for sleep.")
+	if limit >= 100 {
+		s.sleepTransitionActive = false
+		s.wakeHoldUntil = time.Time{}
+		s.mu.Unlock()
+		logger.Default("Pre-sleep charging hook skipped because effective charge limit is 100%%.")
+		return
 	}
+	s.sleepTransitionActive = false
+	s.wakeHoldUntil = time.Time{}
+	s.mu.Unlock()
+
+	logger.Default("Pre-sleep charging hook started (limit %d%%).", limit)
+	deadline := nowFn().Add(preSleepBudget)
+	var lastErr error
+
+	for attempt := 1; attempt <= 2; attempt++ {
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			lastErr = fmt.Errorf("pre-sleep budget exhausted")
+			break
+		}
+
+		logger.Default("Pre-sleep charging disable attempt %d.", attempt)
+		if err := callWithTimeout(minDuration(opTimeout, remaining), func() error {
+			return setChargingStateFn(powerkit.ChargingActionOff)
+		}); err != nil {
+			lastErr = err
+			logger.Error("Pre-sleep charging disable attempt %d failed: %v", attempt, err)
+			continue
+		}
+
+		verified, err := s.verifyChargingDisabled(deadline)
+		if err != nil {
+			lastErr = err
+			logger.Error("Pre-sleep charging verification attempt %d failed: %v", attempt, err)
+			continue
+		}
+		if verified {
+			s.mu.Lock()
+			s.sleepTransitionActive = true
+			s.mu.Unlock()
+			logger.Default("Pre-sleep charging verification succeeded on attempt %d.", attempt)
+			logger.Default("Pre-sleep charging enforcement active; allowing sleep to proceed.")
+			return
+		}
+
+		lastErr = fmt.Errorf("charging still enabled after verification")
+		logger.Error("Pre-sleep charging verification attempt %d reported charging still enabled.", attempt)
+	}
+
+	s.mu.Lock()
+	s.sleepTransitionActive = false
+	s.mu.Unlock()
+	logger.Error("Pre-sleep charging enforcement failed before sleep proceeded: %v", lastErr)
+}
+
+func (s *Daemon) verifyChargingDisabled(deadline time.Time) (bool, error) {
+	remaining := time.Until(deadline)
+	if remaining <= 0 {
+		return false, fmt.Errorf("pre-sleep verification budget exhausted")
+	}
+
+	info, err := getSystemInfoWithTimeout(minDuration(opTimeout, remaining))
+	if err != nil {
+		return false, err
+	}
+
+	s.mu.Lock()
+	s.updateCachedStatusLocked(info)
+	s.mu.Unlock()
+
+	if info.SMC == nil {
+		return false, fmt.Errorf("fresh status missing SMC data")
+	}
+
+	disabled := !info.SMC.State.IsChargingEnabled
+	logger.Default("Pre-sleep verification result: charging_disabled=%v", disabled)
+	return disabled, nil
+}
+
+func (s *Daemon) handleWake() {
+	now := nowFn()
+
+	s.mu.Lock()
+	s.sleepTransitionActive = false
+	if s.wantDisableChargingBeforeSleep && s.currentLimit < 100 {
+		s.wakeHoldUntil = now.Add(wakeHoldDuration)
+		until := s.wakeHoldUntil
+		s.mu.Unlock()
+		logger.Default("Entered wake hold until %s.", until.Format(time.RFC3339))
+		return
+	}
+
+	if !s.wakeHoldUntil.IsZero() {
+		logger.Default("Clearing wake hold because sleep-charging enforcement is inactive.")
+	}
+	s.wakeHoldUntil = time.Time{}
+	s.mu.Unlock()
+	logger.Default("Wake hold not enabled because sleep-charging enforcement is inactive or limit is 100%%.")
 }
 
 func Run(buildID string, buildIDSource string, buildDirty bool) error {
@@ -781,6 +952,13 @@ func callWithTimeout(timeout time.Duration, fn func() error) error {
 	}
 }
 
+func minDuration(a, b time.Duration) time.Duration {
+	if a < b {
+		return a
+	}
+	return b
+}
+
 func getSystemInfoWithTimeout(timeout time.Duration) (*powerkit.SystemInfo, error) {
 	type result struct {
 		info *powerkit.SystemInfo
@@ -788,7 +966,7 @@ func getSystemInfoWithTimeout(timeout time.Duration) (*powerkit.SystemInfo, erro
 	}
 	resCh := make(chan result, 1)
 	go func() {
-		info, err := powerkit.GetSystemInfo()
+		info, err := getSystemInfoFn()
 		resCh <- result{info: info, err: err}
 	}()
 

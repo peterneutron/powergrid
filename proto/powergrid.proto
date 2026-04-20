@@ -48,6 +48,7 @@ message StatusResponse {
   float  battery_temperature_c = 33;      // °C
   int32  battery_voltage_drift_mv = 34;   // Cell max-min drift in mV
   string battery_balance_state = 35;      // balanced | slight_imbalance | high_imbalance | unknown
+  bool  low_power_mode_available = 36;    // macOS Low Power Mode can be controlled/read on this system
 }
 
 enum PowerFeature {

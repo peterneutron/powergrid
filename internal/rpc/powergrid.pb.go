@@ -204,6 +204,7 @@ type StatusResponse struct {
 	BatteryTemperatureC              float32                `protobuf:"fixed32,33,opt,name=battery_temperature_c,json=batteryTemperatureC,proto3" json:"battery_temperature_c,omitempty"`                                             // °C
 	BatteryVoltageDriftMv            int32                  `protobuf:"varint,34,opt,name=battery_voltage_drift_mv,json=batteryVoltageDriftMv,proto3" json:"battery_voltage_drift_mv,omitempty"`                                      // Cell max-min drift in mV
 	BatteryBalanceState              string                 `protobuf:"bytes,35,opt,name=battery_balance_state,json=batteryBalanceState,proto3" json:"battery_balance_state,omitempty"`                                               // balanced | slight_imbalance | high_imbalance | unknown
+	LowPowerModeAvailable            bool                   `protobuf:"varint,36,opt,name=low_power_mode_available,json=lowPowerModeAvailable,proto3" json:"low_power_mode_available,omitempty"`                                      // macOS Low Power Mode can be controlled/read on this system
 	unknownFields                    protoimpl.UnknownFields
 	sizeCache                        protoimpl.SizeCache
 }
@@ -483,6 +484,13 @@ func (x *StatusResponse) GetBatteryBalanceState() string {
 	return ""
 }
 
+func (x *StatusResponse) GetLowPowerModeAvailable() bool {
+	if x != nil {
+		return x.LowPowerModeAvailable
+	}
+	return false
+}
+
 type MutationRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Operation     MutationOperation      `protobuf:"varint,1,opt,name=operation,proto3,enum=rpc.MutationOperation" json:"operation,omitempty"`
@@ -700,7 +708,7 @@ var File_powergrid_proto protoreflect.FileDescriptor
 const file_powergrid_proto_rawDesc = "" +
 	"\n" +
 	"\x0fpowergrid.proto\x12\x03rpc\"\a\n" +
-	"\x05Empty\"\xdb\r\n" +
+	"\x05Empty\"\x94\x0e\n" +
 	"\x0eStatusResponse\x12%\n" +
 	"\x0ecurrent_charge\x18\x01 \x01(\x05R\rcurrentCharge\x12\x1f\n" +
 	"\vis_charging\x18\x02 \x01(\bR\n" +
@@ -739,7 +747,8 @@ const file_powergrid_proto_rawDesc = "" +
 	"\"battery_individual_cell_millivolts\x18  \x03(\x05R\x1fbatteryIndividualCellMillivolts\x122\n" +
 	"\x15battery_temperature_c\x18! \x01(\x02R\x13batteryTemperatureC\x127\n" +
 	"\x18battery_voltage_drift_mv\x18\" \x01(\x05R\x15batteryVoltageDriftMv\x122\n" +
-	"\x15battery_balance_state\x18# \x01(\tR\x13batteryBalanceState\"\xa2\x01\n" +
+	"\x15battery_balance_state\x18# \x01(\tR\x13batteryBalanceState\x127\n" +
+	"\x18low_power_mode_available\x18$ \x01(\bR\x15lowPowerModeAvailable\"\xa2\x01\n" +
 	"\x0fMutationRequest\x124\n" +
 	"\toperation\x18\x01 \x01(\x0e2\x16.rpc.MutationOperationR\toperation\x12\x14\n" +
 	"\x05limit\x18\x02 \x01(\x05R\x05limit\x12+\n" +

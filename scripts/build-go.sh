@@ -98,6 +98,7 @@ echo "Using go binary: ${GO_BIN_RESOLVED}"
 
 DAEMON_SOURCE_DIR="${PROJECT_ROOT}/cmd/powergrid-daemon"
 HELPER_SOURCE_DIR="${PROJECT_ROOT}/cmd/powergrid-helper"
+CLI_SOURCE_DIR="${PROJECT_ROOT}/cmd/powergridctl"
 XCODE_MODE=0
 if [ -n "${SRCROOT:-}" ] && [ -n "${DERIVED_FILE_DIR:-}" ]; then
     XCODE_MODE=1
@@ -189,5 +190,8 @@ META
 
 echo "--- Building powergrid-helper ---"
 "${GO_BIN_RESOLVED}" build -o "${BUILD_OUTPUT_DIR}/powergrid-helper" "${HELPER_SOURCE_DIR}"
+
+echo "--- Building powergridctl ---"
+"${GO_BIN_RESOLVED}" build -o "${BUILD_OUTPUT_DIR}/powergridctl" "${CLI_SOURCE_DIR}"
 
 echo "✅ Go binaries built successfully."
