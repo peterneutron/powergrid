@@ -1,6 +1,7 @@
 name: PowerGrid
 
 options:
+  settingPresets: none
   createIntermediateGroups: true
   groupSortPosition: top
   developmentLanguage: en
