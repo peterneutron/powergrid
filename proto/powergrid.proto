@@ -49,6 +49,9 @@ message StatusResponse {
   int32  battery_voltage_drift_mv = 34;   // Cell max-min drift in mV
   string battery_balance_state = 35;      // balanced | slight_imbalance | high_imbalance | unknown
   bool  low_power_mode_available = 36;    // macOS Low Power Mode can be controlled/read on this system
+  int32 battery_hardware_charge_percent = 37; // Battery management system charge percent
+  float battery_hardware_charge_percent_precise = 38; // AppleRawCurrentCapacity / AppleRawMaxCapacity * 100
+  bool  battery_hardware_charge_available = 39; // Raw smart-battery charge inputs were available
 }
 
 enum PowerFeature {

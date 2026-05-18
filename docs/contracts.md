@@ -76,6 +76,7 @@ Protocol rules:
 - Low Power Mode read and toggle
 - daemon-backed CLI controls
 - live battery and adapter telemetry in the app
+- optional hardware battery percentage display from raw smart-battery telemetry
 
 ## CLI
 

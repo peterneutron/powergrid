@@ -80,9 +80,10 @@ struct MenuBarLabelView: View {
                 case .connected:
                     if let status = client.status {
                         let tint = labelColor(for: status)
+                        let useHardwarePercentage = client.userIntent.showHardwareBatteryPercentage
                         switch client.userIntent.menuBarDisplayStyle {
                         case .iconAndText:
-                            StatusTextLabel(status: status)
+                            StatusTextLabel(status: status, useHardwareBatteryPercentage: useHardwarePercentage)
                                 .foregroundStyle(tint)
                             StatusIconLabel(status: status)
                                 .foregroundStyle(tint)
@@ -90,7 +91,7 @@ struct MenuBarLabelView: View {
                             StatusIconLabel(status: status)
                                 .foregroundStyle(tint)
                         case .textOnly:
-                            StatusTextLabel(status: status)
+                            StatusTextLabel(status: status, useHardwareBatteryPercentage: useHardwarePercentage)
                                 .foregroundStyle(tint)
                             lowPowerBadge(for: status)
                         }
@@ -116,9 +117,18 @@ struct MenuBarLabelView: View {
 
 private struct StatusTextLabel: View {
     let status: Rpc_StatusResponse
+    let useHardwareBatteryPercentage: Bool
+
     var body: some View {
-        Text("\(Int(status.currentCharge))%")
+        Text("\(displayedBatteryPercent(for: status, usingHardwareBatteryPercentage: useHardwareBatteryPercentage))%")
     }
+}
+
+private func displayedBatteryPercent(for status: Rpc_StatusResponse, usingHardwareBatteryPercentage: Bool) -> Int {
+    if usingHardwareBatteryPercentage && status.batteryHardwareChargeAvailable {
+        return Int(status.batteryHardwareChargePercent)
+    }
+    return Int(status.currentCharge)
 }
 
 private struct StatusIconLabel: View {
@@ -326,7 +336,7 @@ struct HeaderView: View {
             HStack(spacing: 4) {
                 Text("")
                 if displayStyle == .iconOnly {
-                    Text("\(status.currentCharge)%")
+                    Text("\(displayedBatteryPercent(for: status, usingHardwareBatteryPercentage: userIntent.showHardwareBatteryPercentage))%")
                         .foregroundColor(chargeColor())
                         .monospacedDigit()
                 }
@@ -407,7 +417,10 @@ struct HeaderView: View {
             
             if userIntent.showBatteryDetails {
                 Divider().padding(.vertical, 2)
-                BatteryDetailsView(status: status)
+                BatteryDetailsView(
+                    status: status,
+                    showHardwareBatteryPercentage: userIntent.showHardwareBatteryPercentage
+                )
             }
         }
         .font(.caption)
@@ -429,6 +442,7 @@ struct HeaderView: View {
 
 struct BatteryDetailsView: View {
     let status: Rpc_StatusResponse
+    let showHardwareBatteryPercentage: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -478,6 +492,24 @@ struct BatteryDetailsView: View {
                 // Right column
                 VStack(alignment: .leading, spacing: 4) {
                     Grid(alignment: .leading, horizontalSpacing: 4) {
+                        if showHardwareBatteryPercentage {
+                            GridRow {
+                                Text("HW %:")
+                                Text(status.batteryHardwareChargeAvailable ? "\(status.batteryHardwareChargePercent)" : "—")
+                                    .monospacedDigit()
+                                    .gridColumnAlignment(.trailing)
+                                Text(status.batteryHardwareChargeAvailable ? "%" : "")
+                                    .foregroundColor(.primary)
+                            }
+                            GridRow {
+                                Text("HW exact:")
+                                Text(status.batteryHardwareChargeAvailable ? String(format: "%.1f", status.batteryHardwareChargePercentPrecise) : "—")
+                                    .monospacedDigit()
+                                    .gridColumnAlignment(.trailing)
+                                Text(status.batteryHardwareChargeAvailable ? "%" : "")
+                                    .foregroundColor(.primary)
+                            }
+                        }
                         GridRow {
                             Text("D-Cap:")
                             Text(status.batteryDesignCapacity > 0 ? "\(status.batteryDesignCapacity)" : "—")
@@ -911,6 +943,14 @@ struct FooterActionsView: View {
                         }
 
                         Toggle("Show Battery Details", isOn: $client.userIntent.showBatteryDetails)
+
+                        Toggle("Hardware Battery Percentage", isOn: $client.userIntent.showHardwareBatteryPercentage)
+                        if client.userIntent.showHardwareBatteryPercentage,
+                           !(client.status?.batteryHardwareChargeAvailable ?? false) {
+                            Text("Hardware percentage unavailable.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                     
                     Button("View Daemon Logs in Console") {

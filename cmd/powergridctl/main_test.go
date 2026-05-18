@@ -75,3 +75,37 @@ func TestSleepModeFromStatus(t *testing.T) {
 		})
 	}
 }
+
+func TestFormatHardwareCharge(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		status *rpc.StatusResponse
+		want   string
+	}{
+		{name: "nil", status: nil, want: "unavailable"},
+		{name: "unavailable", status: &rpc.StatusResponse{}, want: "unavailable"},
+		{
+			name: "available",
+			status: &rpc.StatusResponse{
+				BatteryHardwareChargeAvailable:      true,
+				BatteryHardwareChargePercent:        65,
+				BatteryHardwareChargePercentPrecise: 64.1,
+			},
+			want: "65% (64.1% precise)",
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := formatHardwareCharge(tc.status)
+			if got != tc.want {
+				t.Fatalf("formatHardwareCharge() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}

@@ -32,7 +32,7 @@ const (
 	preSleepBudget     = 5 * time.Second
 	wakeHoldDuration   = 30 * time.Second
 	apiMajor           = uint32(1)
-	apiMinor           = uint32(0)
+	apiMinor           = uint32(1)
 )
 
 var logger = oslogger.NewLogger(logSubsystem, "Daemon")
@@ -129,6 +129,9 @@ func (s *Daemon) GetStatus(_ context.Context, _ *rpc.Empty) (*rpc.StatusResponse
 		resp.BatteryNominalCapacity = int32(b.NominalCapacity)
 		resp.BatteryVoltage = float32(b.Voltage)
 		resp.BatteryAmperage = float32(b.Amperage)
+		resp.BatteryHardwareChargePercent = int32(b.HardwareChargePercent)
+		resp.BatteryHardwareChargePercentPrecise = float32(b.HardwareChargePercentPrecise)
+		resp.BatteryHardwareChargeAvailable = b.HardwareChargeAvailable
 		resp.BatteryVoltageDriftMv = int32(s.lastIOKitStatus.Calculations.VoltageDriftMV)
 		resp.BatteryBalanceState = string(s.lastIOKitStatus.Calculations.BalanceState)
 		// Temperature (°C) if available
@@ -163,6 +166,7 @@ func (s *Daemon) GetDaemonInfo(_ context.Context, _ *rpc.Empty) (*rpc.DaemonInfo
 		Capabilities: []string{
 			"apply-mutation",
 			"daemon-info",
+			"hardware-charge-percent",
 		},
 	}, nil
 }

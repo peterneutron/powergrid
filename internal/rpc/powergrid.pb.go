@@ -168,45 +168,48 @@ func (*Empty) Descriptor() ([]byte, []int) {
 }
 
 type StatusResponse struct {
-	state                            protoimpl.MessageState `protogen:"open.v1"`
-	CurrentCharge                    int32                  `protobuf:"varint,1,opt,name=current_charge,json=currentCharge,proto3" json:"current_charge,omitempty"`
-	IsCharging                       bool                   `protobuf:"varint,2,opt,name=is_charging,json=isCharging,proto3" json:"is_charging,omitempty"`
-	IsConnected                      bool                   `protobuf:"varint,3,opt,name=is_connected,json=isConnected,proto3" json:"is_connected,omitempty"`
-	ChargeLimit                      int32                  `protobuf:"varint,4,opt,name=charge_limit,json=chargeLimit,proto3" json:"charge_limit,omitempty"`
-	IsChargeLimited                  bool                   `protobuf:"varint,5,opt,name=is_charge_limited,json=isChargeLimited,proto3" json:"is_charge_limited,omitempty"`
-	CycleCount                       int32                  `protobuf:"varint,6,opt,name=cycle_count,json=cycleCount,proto3" json:"cycle_count,omitempty"`
-	AdapterDescription               string                 `protobuf:"bytes,7,opt,name=adapter_description,json=adapterDescription,proto3" json:"adapter_description,omitempty"`
-	BatteryWattage                   float32                `protobuf:"fixed32,8,opt,name=battery_wattage,json=batteryWattage,proto3" json:"battery_wattage,omitempty"`
-	AdapterWattage                   float32                `protobuf:"fixed32,9,opt,name=adapter_wattage,json=adapterWattage,proto3" json:"adapter_wattage,omitempty"`
-	SystemWattage                    float32                `protobuf:"fixed32,10,opt,name=system_wattage,json=systemWattage,proto3" json:"system_wattage,omitempty"`
-	HealthByMax                      int32                  `protobuf:"varint,11,opt,name=health_by_max,json=healthByMax,proto3" json:"health_by_max,omitempty"`                                                                      // IOKit.Calculations.HealthByMaxCapacity
-	AdapterInputVoltage              float32                `protobuf:"fixed32,12,opt,name=adapter_input_voltage,json=adapterInputVoltage,proto3" json:"adapter_input_voltage,omitempty"`                                             // IOKit.Adapter.InputVoltage (V)
-	AdapterInputAmperage             float32                `protobuf:"fixed32,13,opt,name=adapter_input_amperage,json=adapterInputAmperage,proto3" json:"adapter_input_amperage,omitempty"`                                          // IOKit.Adapter.InputAmperage (A)
-	PreventDisplaySleepActive        bool                   `protobuf:"varint,14,opt,name=prevent_display_sleep_active,json=preventDisplaySleepActive,proto3" json:"prevent_display_sleep_active,omitempty"`                          // Assertion active in this process
-	PreventSystemSleepActive         bool                   `protobuf:"varint,15,opt,name=prevent_system_sleep_active,json=preventSystemSleepActive,proto3" json:"prevent_system_sleep_active,omitempty"`                             // Assertion active in this process
-	ForceDischargeActive             bool                   `protobuf:"varint,16,opt,name=force_discharge_active,json=forceDischargeActive,proto3" json:"force_discharge_active,omitempty"`                                           // Adapter disabled via SMC
-	SmcChargingEnabled               bool                   `protobuf:"varint,17,opt,name=smc_charging_enabled,json=smcChargingEnabled,proto3" json:"smc_charging_enabled,omitempty"`                                                 // SMC.State.IsChargingEnabled
-	SmcAdapterEnabled                bool                   `protobuf:"varint,18,opt,name=smc_adapter_enabled,json=smcAdapterEnabled,proto3" json:"smc_adapter_enabled,omitempty"`                                                    // SMC.State.IsAdapterEnabled
-	AdapterMaxWatts                  int32                  `protobuf:"varint,19,opt,name=adapter_max_watts,json=adapterMaxWatts,proto3" json:"adapter_max_watts,omitempty"`                                                          // IOKit.Adapter.MaxWatts (W)
-	TimeToFullMinutes                int32                  `protobuf:"varint,20,opt,name=time_to_full_minutes,json=timeToFullMinutes,proto3" json:"time_to_full_minutes,omitempty"`                                                  // IOKit.Battery.TimeToFull (minutes)
-	TimeToEmptyMinutes               int32                  `protobuf:"varint,21,opt,name=time_to_empty_minutes,json=timeToEmptyMinutes,proto3" json:"time_to_empty_minutes,omitempty"`                                               // IOKit.Battery.TimeToEmpty (minutes)
-	MagsafeLedControlActive          bool                   `protobuf:"varint,22,opt,name=magsafe_led_control_active,json=magsafeLedControlActive,proto3" json:"magsafe_led_control_active,omitempty"`                                // Whether daemon is controlling MagSafe LED
-	MagsafeLedSupported              bool                   `protobuf:"varint,23,opt,name=magsafe_led_supported,json=magsafeLedSupported,proto3" json:"magsafe_led_supported,omitempty"`                                              // Hardware supports MagSafe LED control
-	LowPowerModeEnabled              bool                   `protobuf:"varint,24,opt,name=low_power_mode_enabled,json=lowPowerModeEnabled,proto3" json:"low_power_mode_enabled,omitempty"`                                            // macOS Low Power Mode is enabled
-	DisableChargingBeforeSleepActive bool                   `protobuf:"varint,25,opt,name=disable_charging_before_sleep_active,json=disableChargingBeforeSleepActive,proto3" json:"disable_charging_before_sleep_active,omitempty"`   // Whether daemon will disable charging before sleep
-	BatterySerialNumber              string                 `protobuf:"bytes,26,opt,name=battery_serial_number,json=batterySerialNumber,proto3" json:"battery_serial_number,omitempty"`                                               // Battery serial number
-	BatteryDesignCapacity            int32                  `protobuf:"varint,27,opt,name=battery_design_capacity,json=batteryDesignCapacity,proto3" json:"battery_design_capacity,omitempty"`                                        // mAh
-	BatteryMaxCapacity               int32                  `protobuf:"varint,28,opt,name=battery_max_capacity,json=batteryMaxCapacity,proto3" json:"battery_max_capacity,omitempty"`                                                 // mAh (current maximum)
-	BatteryNominalCapacity           int32                  `protobuf:"varint,29,opt,name=battery_nominal_capacity,json=batteryNominalCapacity,proto3" json:"battery_nominal_capacity,omitempty"`                                     // mAh (design nominal)
-	BatteryVoltage                   float32                `protobuf:"fixed32,30,opt,name=battery_voltage,json=batteryVoltage,proto3" json:"battery_voltage,omitempty"`                                                              // V
-	BatteryAmperage                  float32                `protobuf:"fixed32,31,opt,name=battery_amperage,json=batteryAmperage,proto3" json:"battery_amperage,omitempty"`                                                           // A
-	BatteryIndividualCellMillivolts  []int32                `protobuf:"varint,32,rep,packed,name=battery_individual_cell_millivolts,json=batteryIndividualCellMillivolts,proto3" json:"battery_individual_cell_millivolts,omitempty"` // Per-cell voltage in mV
-	BatteryTemperatureC              float32                `protobuf:"fixed32,33,opt,name=battery_temperature_c,json=batteryTemperatureC,proto3" json:"battery_temperature_c,omitempty"`                                             // °C
-	BatteryVoltageDriftMv            int32                  `protobuf:"varint,34,opt,name=battery_voltage_drift_mv,json=batteryVoltageDriftMv,proto3" json:"battery_voltage_drift_mv,omitempty"`                                      // Cell max-min drift in mV
-	BatteryBalanceState              string                 `protobuf:"bytes,35,opt,name=battery_balance_state,json=batteryBalanceState,proto3" json:"battery_balance_state,omitempty"`                                               // balanced | slight_imbalance | high_imbalance | unknown
-	LowPowerModeAvailable            bool                   `protobuf:"varint,36,opt,name=low_power_mode_available,json=lowPowerModeAvailable,proto3" json:"low_power_mode_available,omitempty"`                                      // macOS Low Power Mode can be controlled/read on this system
-	unknownFields                    protoimpl.UnknownFields
-	sizeCache                        protoimpl.SizeCache
+	state                               protoimpl.MessageState `protogen:"open.v1"`
+	CurrentCharge                       int32                  `protobuf:"varint,1,opt,name=current_charge,json=currentCharge,proto3" json:"current_charge,omitempty"`
+	IsCharging                          bool                   `protobuf:"varint,2,opt,name=is_charging,json=isCharging,proto3" json:"is_charging,omitempty"`
+	IsConnected                         bool                   `protobuf:"varint,3,opt,name=is_connected,json=isConnected,proto3" json:"is_connected,omitempty"`
+	ChargeLimit                         int32                  `protobuf:"varint,4,opt,name=charge_limit,json=chargeLimit,proto3" json:"charge_limit,omitempty"`
+	IsChargeLimited                     bool                   `protobuf:"varint,5,opt,name=is_charge_limited,json=isChargeLimited,proto3" json:"is_charge_limited,omitempty"`
+	CycleCount                          int32                  `protobuf:"varint,6,opt,name=cycle_count,json=cycleCount,proto3" json:"cycle_count,omitempty"`
+	AdapterDescription                  string                 `protobuf:"bytes,7,opt,name=adapter_description,json=adapterDescription,proto3" json:"adapter_description,omitempty"`
+	BatteryWattage                      float32                `protobuf:"fixed32,8,opt,name=battery_wattage,json=batteryWattage,proto3" json:"battery_wattage,omitempty"`
+	AdapterWattage                      float32                `protobuf:"fixed32,9,opt,name=adapter_wattage,json=adapterWattage,proto3" json:"adapter_wattage,omitempty"`
+	SystemWattage                       float32                `protobuf:"fixed32,10,opt,name=system_wattage,json=systemWattage,proto3" json:"system_wattage,omitempty"`
+	HealthByMax                         int32                  `protobuf:"varint,11,opt,name=health_by_max,json=healthByMax,proto3" json:"health_by_max,omitempty"`                                                                              // IOKit.Calculations.HealthByMaxCapacity
+	AdapterInputVoltage                 float32                `protobuf:"fixed32,12,opt,name=adapter_input_voltage,json=adapterInputVoltage,proto3" json:"adapter_input_voltage,omitempty"`                                                     // IOKit.Adapter.InputVoltage (V)
+	AdapterInputAmperage                float32                `protobuf:"fixed32,13,opt,name=adapter_input_amperage,json=adapterInputAmperage,proto3" json:"adapter_input_amperage,omitempty"`                                                  // IOKit.Adapter.InputAmperage (A)
+	PreventDisplaySleepActive           bool                   `protobuf:"varint,14,opt,name=prevent_display_sleep_active,json=preventDisplaySleepActive,proto3" json:"prevent_display_sleep_active,omitempty"`                                  // Assertion active in this process
+	PreventSystemSleepActive            bool                   `protobuf:"varint,15,opt,name=prevent_system_sleep_active,json=preventSystemSleepActive,proto3" json:"prevent_system_sleep_active,omitempty"`                                     // Assertion active in this process
+	ForceDischargeActive                bool                   `protobuf:"varint,16,opt,name=force_discharge_active,json=forceDischargeActive,proto3" json:"force_discharge_active,omitempty"`                                                   // Adapter disabled via SMC
+	SmcChargingEnabled                  bool                   `protobuf:"varint,17,opt,name=smc_charging_enabled,json=smcChargingEnabled,proto3" json:"smc_charging_enabled,omitempty"`                                                         // SMC.State.IsChargingEnabled
+	SmcAdapterEnabled                   bool                   `protobuf:"varint,18,opt,name=smc_adapter_enabled,json=smcAdapterEnabled,proto3" json:"smc_adapter_enabled,omitempty"`                                                            // SMC.State.IsAdapterEnabled
+	AdapterMaxWatts                     int32                  `protobuf:"varint,19,opt,name=adapter_max_watts,json=adapterMaxWatts,proto3" json:"adapter_max_watts,omitempty"`                                                                  // IOKit.Adapter.MaxWatts (W)
+	TimeToFullMinutes                   int32                  `protobuf:"varint,20,opt,name=time_to_full_minutes,json=timeToFullMinutes,proto3" json:"time_to_full_minutes,omitempty"`                                                          // IOKit.Battery.TimeToFull (minutes)
+	TimeToEmptyMinutes                  int32                  `protobuf:"varint,21,opt,name=time_to_empty_minutes,json=timeToEmptyMinutes,proto3" json:"time_to_empty_minutes,omitempty"`                                                       // IOKit.Battery.TimeToEmpty (minutes)
+	MagsafeLedControlActive             bool                   `protobuf:"varint,22,opt,name=magsafe_led_control_active,json=magsafeLedControlActive,proto3" json:"magsafe_led_control_active,omitempty"`                                        // Whether daemon is controlling MagSafe LED
+	MagsafeLedSupported                 bool                   `protobuf:"varint,23,opt,name=magsafe_led_supported,json=magsafeLedSupported,proto3" json:"magsafe_led_supported,omitempty"`                                                      // Hardware supports MagSafe LED control
+	LowPowerModeEnabled                 bool                   `protobuf:"varint,24,opt,name=low_power_mode_enabled,json=lowPowerModeEnabled,proto3" json:"low_power_mode_enabled,omitempty"`                                                    // macOS Low Power Mode is enabled
+	DisableChargingBeforeSleepActive    bool                   `protobuf:"varint,25,opt,name=disable_charging_before_sleep_active,json=disableChargingBeforeSleepActive,proto3" json:"disable_charging_before_sleep_active,omitempty"`           // Whether daemon will disable charging before sleep
+	BatterySerialNumber                 string                 `protobuf:"bytes,26,opt,name=battery_serial_number,json=batterySerialNumber,proto3" json:"battery_serial_number,omitempty"`                                                       // Battery serial number
+	BatteryDesignCapacity               int32                  `protobuf:"varint,27,opt,name=battery_design_capacity,json=batteryDesignCapacity,proto3" json:"battery_design_capacity,omitempty"`                                                // mAh
+	BatteryMaxCapacity                  int32                  `protobuf:"varint,28,opt,name=battery_max_capacity,json=batteryMaxCapacity,proto3" json:"battery_max_capacity,omitempty"`                                                         // mAh (current maximum)
+	BatteryNominalCapacity              int32                  `protobuf:"varint,29,opt,name=battery_nominal_capacity,json=batteryNominalCapacity,proto3" json:"battery_nominal_capacity,omitempty"`                                             // mAh (design nominal)
+	BatteryVoltage                      float32                `protobuf:"fixed32,30,opt,name=battery_voltage,json=batteryVoltage,proto3" json:"battery_voltage,omitempty"`                                                                      // V
+	BatteryAmperage                     float32                `protobuf:"fixed32,31,opt,name=battery_amperage,json=batteryAmperage,proto3" json:"battery_amperage,omitempty"`                                                                   // A
+	BatteryIndividualCellMillivolts     []int32                `protobuf:"varint,32,rep,packed,name=battery_individual_cell_millivolts,json=batteryIndividualCellMillivolts,proto3" json:"battery_individual_cell_millivolts,omitempty"`         // Per-cell voltage in mV
+	BatteryTemperatureC                 float32                `protobuf:"fixed32,33,opt,name=battery_temperature_c,json=batteryTemperatureC,proto3" json:"battery_temperature_c,omitempty"`                                                     // °C
+	BatteryVoltageDriftMv               int32                  `protobuf:"varint,34,opt,name=battery_voltage_drift_mv,json=batteryVoltageDriftMv,proto3" json:"battery_voltage_drift_mv,omitempty"`                                              // Cell max-min drift in mV
+	BatteryBalanceState                 string                 `protobuf:"bytes,35,opt,name=battery_balance_state,json=batteryBalanceState,proto3" json:"battery_balance_state,omitempty"`                                                       // balanced | slight_imbalance | high_imbalance | unknown
+	LowPowerModeAvailable               bool                   `protobuf:"varint,36,opt,name=low_power_mode_available,json=lowPowerModeAvailable,proto3" json:"low_power_mode_available,omitempty"`                                              // macOS Low Power Mode can be controlled/read on this system
+	BatteryHardwareChargePercent        int32                  `protobuf:"varint,37,opt,name=battery_hardware_charge_percent,json=batteryHardwareChargePercent,proto3" json:"battery_hardware_charge_percent,omitempty"`                         // Battery management system charge percent
+	BatteryHardwareChargePercentPrecise float32                `protobuf:"fixed32,38,opt,name=battery_hardware_charge_percent_precise,json=batteryHardwareChargePercentPrecise,proto3" json:"battery_hardware_charge_percent_precise,omitempty"` // AppleRawCurrentCapacity / AppleRawMaxCapacity * 100
+	BatteryHardwareChargeAvailable      bool                   `protobuf:"varint,39,opt,name=battery_hardware_charge_available,json=batteryHardwareChargeAvailable,proto3" json:"battery_hardware_charge_available,omitempty"`                   // Raw smart-battery charge inputs were available
+	unknownFields                       protoimpl.UnknownFields
+	sizeCache                           protoimpl.SizeCache
 }
 
 func (x *StatusResponse) Reset() {
@@ -491,6 +494,27 @@ func (x *StatusResponse) GetLowPowerModeAvailable() bool {
 	return false
 }
 
+func (x *StatusResponse) GetBatteryHardwareChargePercent() int32 {
+	if x != nil {
+		return x.BatteryHardwareChargePercent
+	}
+	return 0
+}
+
+func (x *StatusResponse) GetBatteryHardwareChargePercentPrecise() float32 {
+	if x != nil {
+		return x.BatteryHardwareChargePercentPrecise
+	}
+	return 0
+}
+
+func (x *StatusResponse) GetBatteryHardwareChargeAvailable() bool {
+	if x != nil {
+		return x.BatteryHardwareChargeAvailable
+	}
+	return false
+}
+
 type MutationRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Operation     MutationOperation      `protobuf:"varint,1,opt,name=operation,proto3,enum=rpc.MutationOperation" json:"operation,omitempty"`
@@ -708,7 +732,7 @@ var File_powergrid_proto protoreflect.FileDescriptor
 const file_powergrid_proto_rawDesc = "" +
 	"\n" +
 	"\x0fpowergrid.proto\x12\x03rpc\"\a\n" +
-	"\x05Empty\"\x94\x0e\n" +
+	"\x05Empty\"\xfc\x0f\n" +
 	"\x0eStatusResponse\x12%\n" +
 	"\x0ecurrent_charge\x18\x01 \x01(\x05R\rcurrentCharge\x12\x1f\n" +
 	"\vis_charging\x18\x02 \x01(\bR\n" +
@@ -748,7 +772,10 @@ const file_powergrid_proto_rawDesc = "" +
 	"\x15battery_temperature_c\x18! \x01(\x02R\x13batteryTemperatureC\x127\n" +
 	"\x18battery_voltage_drift_mv\x18\" \x01(\x05R\x15batteryVoltageDriftMv\x122\n" +
 	"\x15battery_balance_state\x18# \x01(\tR\x13batteryBalanceState\x127\n" +
-	"\x18low_power_mode_available\x18$ \x01(\bR\x15lowPowerModeAvailable\"\xa2\x01\n" +
+	"\x18low_power_mode_available\x18$ \x01(\bR\x15lowPowerModeAvailable\x12E\n" +
+	"\x1fbattery_hardware_charge_percent\x18% \x01(\x05R\x1cbatteryHardwareChargePercent\x12T\n" +
+	"'battery_hardware_charge_percent_precise\x18& \x01(\x02R#batteryHardwareChargePercentPrecise\x12I\n" +
+	"!battery_hardware_charge_available\x18' \x01(\bR\x1ebatteryHardwareChargeAvailable\"\xa2\x01\n" +
 	"\x0fMutationRequest\x124\n" +
 	"\toperation\x18\x01 \x01(\x0e2\x16.rpc.MutationOperationR\toperation\x12\x14\n" +
 	"\x05limit\x18\x02 \x01(\x05R\x05limit\x12+\n" +

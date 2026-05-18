@@ -29,6 +29,7 @@ struct AppSettings {
     static let preferredChargeLimitKey = "preferredChargeLimit"
     static let lowPowerNotificationsEnabledKey = "lowPowerNotificationsEnabled"
     static let showBatteryDetailsKey = "showBatteryDetails"
+    static let showHardwareBatteryPercentageKey = "showHardwareBatteryPercentage"
 }
 
 struct AppPreferences {
@@ -73,6 +74,15 @@ struct AppPreferences {
 
     func setShowBatteryDetails(_ enabled: Bool) {
         defaults.set(enabled, forKey: AppSettings.showBatteryDetailsKey)
+    }
+
+    func showHardwareBatteryPercentage() -> Bool? {
+        guard defaults.object(forKey: AppSettings.showHardwareBatteryPercentageKey) != nil else { return nil }
+        return defaults.bool(forKey: AppSettings.showHardwareBatteryPercentageKey)
+    }
+
+    func setShowHardwareBatteryPercentage(_ enabled: Bool) {
+        defaults.set(enabled, forKey: AppSettings.showHardwareBatteryPercentageKey)
     }
 }
 

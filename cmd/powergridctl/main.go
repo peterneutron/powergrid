@@ -148,8 +148,9 @@ func handleStatus(client *commandClient, args []string, stdout io.Writer) error 
 
 	return writef(
 		stdout,
-		"Charge: %d%%\nLimit: %s\nCharging: %s\nConnected: %s\nForce discharge: %s\nSleep mode: %s\nLow Power Mode: %s\n",
+		"Charge: %d%%\nHardware charge: %s\nLimit: %s\nCharging: %s\nConnected: %s\nForce discharge: %s\nSleep mode: %s\nLow Power Mode: %s\n",
 		status.GetCurrentCharge(),
+		formatHardwareCharge(status),
 		formatLimit(status.GetChargeLimit()),
 		formatBinaryState(status.GetIsCharging()),
 		formatBinaryState(status.GetIsConnected()),
@@ -351,6 +352,13 @@ func formatBinaryState(enabled bool) string {
 		return stateOn
 	}
 	return stateOff
+}
+
+func formatHardwareCharge(status *rpc.StatusResponse) string {
+	if status == nil || !status.GetBatteryHardwareChargeAvailable() {
+		return "unavailable"
+	}
+	return fmt.Sprintf("%d%% (%.1f%% precise)", status.GetBatteryHardwareChargePercent(), status.GetBatteryHardwareChargePercentPrecise())
 }
 
 func formatAppliedState(enabled bool) string {

@@ -38,6 +38,7 @@ struct UserIntent: Equatable {
     var menuBarDisplayStyle: MenuBarDisplayStyle = .iconAndText
     var lowPowerNotificationsEnabled: Bool = true
     var showBatteryDetails: Bool = false
+    var showHardwareBatteryPercentage: Bool = false
 }
     
     @MainActor
@@ -64,6 +65,10 @@ struct UserIntent: Equatable {
                 if userIntent.showBatteryDetails != oldValue.showBatteryDetails {
                     preferences.setShowBatteryDetails(userIntent.showBatteryDetails)
                     log("Saved showBatteryDetails: \(userIntent.showBatteryDetails)")
+                }
+                if userIntent.showHardwareBatteryPercentage != oldValue.showHardwareBatteryPercentage {
+                    preferences.setShowHardwareBatteryPercentage(userIntent.showHardwareBatteryPercentage)
+                    log("Saved showHardwareBatteryPercentage: \(userIntent.showHardwareBatteryPercentage)")
                 }
             }
         }
@@ -128,6 +133,9 @@ struct UserIntent: Equatable {
             }
             if let showBatteryDetails = preferences.showBatteryDetails() {
                 initialIntent.showBatteryDetails = showBatteryDetails
+            }
+            if let showHardwareBatteryPercentage = preferences.showHardwareBatteryPercentage() {
+                initialIntent.showHardwareBatteryPercentage = showHardwareBatteryPercentage
             }
             if let notificationsEnabled = preferences.lowPowerNotificationsEnabled() {
                 initialIntent.lowPowerNotificationsEnabled = notificationsEnabled
@@ -293,7 +301,8 @@ struct UserIntent: Equatable {
                     forceDischargeMode: newFDMode,
                     menuBarDisplayStyle: self.userIntent.menuBarDisplayStyle,
                     lowPowerNotificationsEnabled: self.userIntent.lowPowerNotificationsEnabled,
-                    showBatteryDetails: self.userIntent.showBatteryDetails
+                    showBatteryDetails: self.userIntent.showBatteryDetails,
+                    showHardwareBatteryPercentage: self.userIntent.showHardwareBatteryPercentage
                 )
                 
                 if self.userIntent != intentFromServer {
