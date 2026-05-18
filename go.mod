@@ -3,7 +3,7 @@ module powergrid
 go 1.25.0
 
 require (
-	github.com/peterneutron/powerkit-go v0.9.2
+	github.com/peterneutron/powerkit-go v0.9.3
 	golang.org/x/sys v0.43.0
 	google.golang.org/grpc v1.80.0
 	google.golang.org/protobuf v1.36.11
