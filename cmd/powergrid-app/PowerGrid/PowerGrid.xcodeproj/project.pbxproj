@@ -256,7 +256,6 @@
 				};
 			};
 			buildConfigurationList = 08BA206E2CFF81010C272160 /* Build configuration list for PBXProject "PowerGrid" */;
-			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -273,6 +272,7 @@
 				C37CC54177F11922456730EB /* XCRemoteSwiftPackageReference "swift-protobuf" */,
 			);
 			preferredProjectObjectVersion = 77;
+			productRefGroup = 57BECC80F9FB2520E1B6EED1 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
