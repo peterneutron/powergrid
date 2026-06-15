@@ -599,7 +599,7 @@
 			repositoryURL = "https://github.com/grpc/grpc-swift-2.git";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 2.4.0;
+				minimumVersion = 2.4.1;
 			};
 		};
 		9F5F0B5FF598D4B1C16DBBEE /* XCRemoteSwiftPackageReference "swift-nio" */ = {
