@@ -9,6 +9,17 @@ import (
 
 func testSystemInfo(charge int, smcChargingEnabled bool) *powerkit.SystemInfo {
 	return &powerkit.SystemInfo{
+		Controls: powerkit.ControlsInfo{
+			ChargeLimit: powerkit.ChargeLimitCapability{
+				Available:   true,
+				Writable:    true,
+				Backend:     powerkit.ChargeLimitBackendSMCInhibit,
+				MinPercent:  60,
+				MaxPercent:  100,
+				StepPercent: 10,
+				Reason:      "test",
+			},
+		},
 		IOKit: &powerkit.IOKitData{
 			Battery: powerkit.IOKitBattery{
 				CurrentCharge: charge,
@@ -32,13 +43,35 @@ func testSystemInfoWithHardwareCharge(swCharge int, hwPrecise float64, smcChargi
 	return info
 }
 
+func testNativeChargeLimitSystemInfo(charge int) *powerkit.SystemInfo {
+	return &powerkit.SystemInfo{
+		Controls: powerkit.ControlsInfo{
+			ChargeLimit: powerkit.ChargeLimitCapability{
+				Available:       true,
+				Writable:        true,
+				Backend:         powerkit.ChargeLimitBackendNativeMacOS,
+				MinPercent:      80,
+				MaxPercent:      100,
+				StepPercent:     5,
+				AllowedPercents: []int{80, 85, 90, 95, 100},
+				Reason:          "test",
+			},
+		},
+		IOKit: &powerkit.IOKitData{
+			Battery: powerkit.IOKitBattery{CurrentCharge: charge},
+		},
+	}
+}
+
 func resetServerTestGlobals(t *testing.T) {
 	t.Helper()
 	oldSetChargingStateFn := setChargingStateFn
+	oldSetChargeLimitFn := setChargeLimitFn
 	oldGetSystemInfoFn := getSystemInfoFn
 	oldNowFn := nowFn
 	t.Cleanup(func() {
 		setChargingStateFn = oldSetChargingStateFn
+		setChargeLimitFn = oldSetChargeLimitFn
 		getSystemInfoFn = oldGetSystemInfoFn
 		nowFn = oldNowFn
 	})
@@ -79,6 +112,7 @@ func TestHandleBeforeSleepNoopWhenLimitIsHundred(t *testing.T) {
 	d := &Daemon{
 		currentLimit:                   100,
 		wantDisableChargingBeforeSleep: true,
+		lastChargeLimitCapability:      smcChargeLimitCapability(),
 		sleepTransitionActive:          true,
 		wakeHoldUntil:                  time.Now().Add(time.Minute),
 	}
@@ -116,6 +150,7 @@ func TestHandleBeforeSleepSuccessSetsTransitionActive(t *testing.T) {
 	d := &Daemon{
 		currentLimit:                   80,
 		wantDisableChargingBeforeSleep: true,
+		lastChargeLimitCapability:      smcChargeLimitCapability(),
 	}
 	d.handleBeforeSleep()
 
@@ -148,6 +183,7 @@ func TestHandleBeforeSleepRetriesAndClearsTransitionOnFailure(t *testing.T) {
 	d := &Daemon{
 		currentLimit:                   80,
 		wantDisableChargingBeforeSleep: true,
+		lastChargeLimitCapability:      smcChargeLimitCapability(),
 		sleepTransitionActive:          true,
 	}
 	d.handleBeforeSleep()
@@ -173,8 +209,9 @@ func TestRunChargingLogicSuppressesEnableDuringSleepTransition(t *testing.T) {
 	}
 
 	d := &Daemon{
-		currentLimit:          80,
-		sleepTransitionActive: true,
+		currentLimit:                   80,
+		wantDisableChargingBeforeSleep: true,
+		sleepTransitionActive:          true,
 	}
 	d.runChargingLogicLocked(testSystemInfo(79, false))
 
@@ -234,10 +271,10 @@ func TestRunChargingLogicUsesRoundedHardwareChargeWhenEnabled(t *testing.T) {
 	}
 
 	d := &Daemon{
-		currentLimit:                  50,
+		currentLimit:                  60,
 		wantHardwareBatteryPercentage: true,
 	}
-	d.runChargingLogicLocked(testSystemInfoWithHardwareCharge(49, 49.5, true))
+	d.runChargingLogicLocked(testSystemInfoWithHardwareCharge(59, 59.5, true))
 
 	if len(actions) != 1 || actions[0] != powerkit.ChargingActionOff {
 		t.Fatalf("expected rounded hardware charge to disable charging at limit, got %v", actions)
@@ -254,10 +291,10 @@ func TestRunChargingLogicRoundsHardwareChargeDownBelowHalf(t *testing.T) {
 	}
 
 	d := &Daemon{
-		currentLimit:                  50,
+		currentLimit:                  60,
 		wantHardwareBatteryPercentage: true,
 	}
-	d.runChargingLogicLocked(testSystemInfoWithHardwareCharge(51, 49.4, true))
+	d.runChargingLogicLocked(testSystemInfoWithHardwareCharge(61, 59.4, true))
 
 	if len(actions) != 0 {
 		t.Fatalf("expected rounded hardware charge below limit to keep charging unchanged, got %v", actions)
@@ -274,10 +311,10 @@ func TestRunChargingLogicFallsBackToSoftwareChargeWhenHardwareUnavailable(t *tes
 	}
 
 	d := &Daemon{
-		currentLimit:                  50,
+		currentLimit:                  60,
 		wantHardwareBatteryPercentage: true,
 	}
-	d.runChargingLogicLocked(testSystemInfo(49, true))
+	d.runChargingLogicLocked(testSystemInfo(59, true))
 
 	if len(actions) != 0 {
 		t.Fatalf("expected unavailable hardware charge to fall back to software charge below limit, got %v", actions)
@@ -301,5 +338,33 @@ func TestRunChargingLogicSkipsWhenChargingControlUnavailable(t *testing.T) {
 
 	if len(actions) != 0 {
 		t.Fatalf("expected no charging writes when SMC charging control is unavailable, got %v", actions)
+	}
+}
+
+func TestRunChargingLogicUsesNativeChargeLimitBackend(t *testing.T) {
+	resetServerTestGlobals(t)
+
+	smcCalls := 0
+	setChargingStateFn = func(powerkit.ChargingAction) error {
+		smcCalls++
+		return nil
+	}
+	var nativeLimit int
+	setChargeLimitFn = func(limit int) error {
+		nativeLimit = limit
+		return nil
+	}
+
+	d := &Daemon{currentLimit: 60}
+	d.runChargingLogic(testNativeChargeLimitSystemInfo(72))
+
+	if nativeLimit != 80 {
+		t.Fatalf("expected native backend to normalize and set 80, got %d", nativeLimit)
+	}
+	if smcCalls != 0 {
+		t.Fatalf("expected native backend to avoid SMC charging writes, got %d", smcCalls)
+	}
+	if d.currentLimit != 80 {
+		t.Fatalf("expected daemon currentLimit to normalize to 80, got %d", d.currentLimit)
 	}
 }

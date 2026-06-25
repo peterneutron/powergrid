@@ -212,6 +212,13 @@ type StatusResponse struct {
 	BatteryHardwareChargePercentPrecise float32                `protobuf:"fixed32,38,opt,name=battery_hardware_charge_percent_precise,json=batteryHardwareChargePercentPrecise,proto3" json:"battery_hardware_charge_percent_precise,omitempty"` // AppleRawCurrentCapacity / AppleRawMaxCapacity * 100
 	BatteryHardwareChargeAvailable      bool                   `protobuf:"varint,39,opt,name=battery_hardware_charge_available,json=batteryHardwareChargeAvailable,proto3" json:"battery_hardware_charge_available,omitempty"`                   // Raw smart-battery charge inputs were available
 	HardwareBatteryPercentageActive     bool                   `protobuf:"varint,40,opt,name=hardware_battery_percentage_active,json=hardwareBatteryPercentageActive,proto3" json:"hardware_battery_percentage_active,omitempty"`                // Daemon uses rounded hardware percentage for charge-limit decisions
+	ChargeLimitBackend                  string                 `protobuf:"bytes,41,opt,name=charge_limit_backend,json=chargeLimitBackend,proto3" json:"charge_limit_backend,omitempty"`                                                          // native_macos | smc_inhibit | unavailable
+	ChargeLimitAvailable                bool                   `protobuf:"varint,42,opt,name=charge_limit_available,json=chargeLimitAvailable,proto3" json:"charge_limit_available,omitempty"`                                                   // A charge-limit backend is available
+	ChargeLimitWritable                 bool                   `protobuf:"varint,43,opt,name=charge_limit_writable,json=chargeLimitWritable,proto3" json:"charge_limit_writable,omitempty"`                                                      // The selected backend can write limits
+	ChargeLimitMinPercent               int32                  `protobuf:"varint,44,opt,name=charge_limit_min_percent,json=chargeLimitMinPercent,proto3" json:"charge_limit_min_percent,omitempty"`                                              // Minimum accepted limit for selected backend
+	ChargeLimitMaxPercent               int32                  `protobuf:"varint,45,opt,name=charge_limit_max_percent,json=chargeLimitMaxPercent,proto3" json:"charge_limit_max_percent,omitempty"`                                              // Maximum accepted limit for selected backend
+	ChargeLimitStepPercent              int32                  `protobuf:"varint,46,opt,name=charge_limit_step_percent,json=chargeLimitStepPercent,proto3" json:"charge_limit_step_percent,omitempty"`                                           // UI step hint for selected backend
+	ChargeLimitAllowedPercents          []int32                `protobuf:"varint,47,rep,packed,name=charge_limit_allowed_percents,json=chargeLimitAllowedPercents,proto3" json:"charge_limit_allowed_percents,omitempty"`                        // Hard allowed set when backend exposes one
 	unknownFields                       protoimpl.UnknownFields
 	sizeCache                           protoimpl.SizeCache
 }
@@ -526,6 +533,55 @@ func (x *StatusResponse) GetHardwareBatteryPercentageActive() bool {
 	return false
 }
 
+func (x *StatusResponse) GetChargeLimitBackend() string {
+	if x != nil {
+		return x.ChargeLimitBackend
+	}
+	return ""
+}
+
+func (x *StatusResponse) GetChargeLimitAvailable() bool {
+	if x != nil {
+		return x.ChargeLimitAvailable
+	}
+	return false
+}
+
+func (x *StatusResponse) GetChargeLimitWritable() bool {
+	if x != nil {
+		return x.ChargeLimitWritable
+	}
+	return false
+}
+
+func (x *StatusResponse) GetChargeLimitMinPercent() int32 {
+	if x != nil {
+		return x.ChargeLimitMinPercent
+	}
+	return 0
+}
+
+func (x *StatusResponse) GetChargeLimitMaxPercent() int32 {
+	if x != nil {
+		return x.ChargeLimitMaxPercent
+	}
+	return 0
+}
+
+func (x *StatusResponse) GetChargeLimitStepPercent() int32 {
+	if x != nil {
+		return x.ChargeLimitStepPercent
+	}
+	return 0
+}
+
+func (x *StatusResponse) GetChargeLimitAllowedPercents() []int32 {
+	if x != nil {
+		return x.ChargeLimitAllowedPercents
+	}
+	return nil
+}
+
 type MutationRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Operation     MutationOperation      `protobuf:"varint,1,opt,name=operation,proto3,enum=rpc.MutationOperation" json:"operation,omitempty"`
@@ -743,7 +799,7 @@ var File_powergrid_proto protoreflect.FileDescriptor
 const file_powergrid_proto_rawDesc = "" +
 	"\n" +
 	"\x0fpowergrid.proto\x12\x03rpc\"\a\n" +
-	"\x05Empty\"\xc9\x10\n" +
+	"\x05Empty\"\xd5\x13\n" +
 	"\x0eStatusResponse\x12%\n" +
 	"\x0ecurrent_charge\x18\x01 \x01(\x05R\rcurrentCharge\x12\x1f\n" +
 	"\vis_charging\x18\x02 \x01(\bR\n" +
@@ -787,7 +843,14 @@ const file_powergrid_proto_rawDesc = "" +
 	"\x1fbattery_hardware_charge_percent\x18% \x01(\x05R\x1cbatteryHardwareChargePercent\x12T\n" +
 	"'battery_hardware_charge_percent_precise\x18& \x01(\x02R#batteryHardwareChargePercentPrecise\x12I\n" +
 	"!battery_hardware_charge_available\x18' \x01(\bR\x1ebatteryHardwareChargeAvailable\x12K\n" +
-	"\"hardware_battery_percentage_active\x18( \x01(\bR\x1fhardwareBatteryPercentageActive\"\xa2\x01\n" +
+	"\"hardware_battery_percentage_active\x18( \x01(\bR\x1fhardwareBatteryPercentageActive\x120\n" +
+	"\x14charge_limit_backend\x18) \x01(\tR\x12chargeLimitBackend\x124\n" +
+	"\x16charge_limit_available\x18* \x01(\bR\x14chargeLimitAvailable\x122\n" +
+	"\x15charge_limit_writable\x18+ \x01(\bR\x13chargeLimitWritable\x127\n" +
+	"\x18charge_limit_min_percent\x18, \x01(\x05R\x15chargeLimitMinPercent\x127\n" +
+	"\x18charge_limit_max_percent\x18- \x01(\x05R\x15chargeLimitMaxPercent\x129\n" +
+	"\x19charge_limit_step_percent\x18. \x01(\x05R\x16chargeLimitStepPercent\x12A\n" +
+	"\x1dcharge_limit_allowed_percents\x18/ \x03(\x05R\x1achargeLimitAllowedPercents\"\xa2\x01\n" +
 	"\x0fMutationRequest\x124\n" +
 	"\toperation\x18\x01 \x01(\x0e2\x16.rpc.MutationOperationR\toperation\x12\x14\n" +
 	"\x05limit\x18\x02 \x01(\x05R\x05limit\x12+\n" +

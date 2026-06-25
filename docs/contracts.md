@@ -53,6 +53,9 @@ Protocol rules:
 - insufficient `api_minor`: degraded or blocked
 - same major plus sufficient minor: compatible
 
+Current protocol version: `1.3`. Version `1.3` adds charge-limit backend and
+range fields to `StatusResponse`.
+
 `GetDaemonInfo` also exposes:
 
 - `auth_mode`
@@ -65,11 +68,11 @@ Protocol rules:
 - debounced battery-update coalescing reduces redundant recompute
 - watchdog fallback periodically recomputes state
 - hardware operations are bounded by timeouts
-- SMC control availability is part of daemon state; unavailable charge control is not treated as active charge limiting
+- charge-limit backend availability is part of daemon state; unavailable charge control is not treated as active charge limiting
 
 ## Features
 
-- charge limit control with user and system preference precedence, when a writable low-level charging control is available
+- charge limit control with user and system preference precedence, when a writable backend is available
 - force discharge
 - prevent display sleep and prevent system sleep
 - optional MagSafe LED control
@@ -118,7 +121,18 @@ configured value.
 ## Battery Control Availability
 
 PowerGrid depends on `powerkit-go` for low-level battery telemetry and control.
-The daemon treats SMC control state as capability-sensitive:
+The daemon treats charge-limit backend and SMC control state as
+capability-sensitive:
+
+- `StatusResponse.charge_limit_backend` selects `native_macos`, `smc_inhibit`,
+  or `unavailable`.
+- `charge_limit_min_percent`, `charge_limit_max_percent`,
+  `charge_limit_step_percent`, and `charge_limit_allowed_percents` drive app and
+  CLI validation.
+- `native_macos`: write limits through `powerkit.SetChargeLimit`; skip the SMC
+  inhibition loop and SMC disable-before-sleep hook.
+- `smc_inhibit`: keep the existing PowerGrid enforcement loop using
+  `powerkit.SetChargingState`.
 
 - `SMC.State.ChargingControlAvailable=false`: skip charge-limit enforcement
   writes, report `is_charge_limited=false`, and avoid UI text that implies
@@ -152,10 +166,10 @@ surfaces. Investigation on macOS 27.0 Developer Beta 2 found:
 - SMC and IORegistry sweeps did not reveal an obvious replacement key that
   tracks native target changes below Apple's `80%` floor.
 
-PowerGrid does not currently integrate the native PowerUI charge-limit path.
-If it is added later, it must be modeled as a separate backend with its own
-capability and range reporting rather than as a drop-in replacement for SMC
-charge inhibition.
+PowerGrid integrates this through `powerkit-go` as the `native_macos`
+charge-limit backend. The app limits the slider to the backend-reported range
+and allowed values, currently `80, 85, 90, 95, 100` when the PowerUI probe
+succeeds.
 
 ## Build and Tooling
 

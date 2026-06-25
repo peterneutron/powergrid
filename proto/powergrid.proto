@@ -53,6 +53,13 @@ message StatusResponse {
   float battery_hardware_charge_percent_precise = 38; // AppleRawCurrentCapacity / AppleRawMaxCapacity * 100
   bool  battery_hardware_charge_available = 39; // Raw smart-battery charge inputs were available
   bool  hardware_battery_percentage_active = 40; // Daemon uses rounded hardware percentage for charge-limit decisions
+  string charge_limit_backend = 41; // native_macos | smc_inhibit | unavailable
+  bool  charge_limit_available = 42; // A charge-limit backend is available
+  bool  charge_limit_writable = 43; // The selected backend can write limits
+  int32 charge_limit_min_percent = 44; // Minimum accepted limit for selected backend
+  int32 charge_limit_max_percent = 45; // Maximum accepted limit for selected backend
+  int32 charge_limit_step_percent = 46; // UI step hint for selected backend
+  repeated int32 charge_limit_allowed_percents = 47; // Hard allowed set when backend exposes one
 }
 
 enum PowerFeature {

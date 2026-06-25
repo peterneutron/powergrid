@@ -43,6 +43,27 @@ func TestParseLimitValue(t *testing.T) {
 	}
 }
 
+func TestParseLimitValueForNativeAllowedValues(t *testing.T) {
+	t.Parallel()
+
+	status := &rpc.StatusResponse{
+		ChargeLimitAvailable:       true,
+		ChargeLimitWritable:        true,
+		ChargeLimitBackend:         "native_macos",
+		ChargeLimitMinPercent:      80,
+		ChargeLimitMaxPercent:      100,
+		ChargeLimitStepPercent:     5,
+		ChargeLimitAllowedPercents: []int32{80, 85, 90, 95, 100},
+	}
+
+	if got, err := parseLimitValueForStatus("85", status); err != nil || got != 85 {
+		t.Fatalf("parseLimitValueForStatus(85) = %d, %v; want 85, nil", got, err)
+	}
+	if _, err := parseLimitValueForStatus("60", status); err == nil {
+		t.Fatal("expected native parser to reject 60")
+	}
+}
+
 func TestSleepModeFromStatus(t *testing.T) {
 	t.Parallel()
 

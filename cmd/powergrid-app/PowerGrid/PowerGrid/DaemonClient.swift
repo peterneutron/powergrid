@@ -40,9 +40,58 @@ struct UserIntent: Equatable {
     var showBatteryDetails: Bool = false
     var showHardwareBatteryPercentage: Bool = false
 }
-    
-    @MainActor
-    class DaemonClient: ObservableObject {
+
+func chargeLimitMinPercent(for status: Rpc_StatusResponse?) -> Int {
+    let value = Int(status?.chargeLimitMinPercent ?? 0)
+    return value > 0 ? value : 60
+}
+
+func chargeLimitMaxPercent(for status: Rpc_StatusResponse?) -> Int {
+    let value = Int(status?.chargeLimitMaxPercent ?? 0)
+    return value > 0 ? value : 100
+}
+
+func chargeLimitStepPercent(for status: Rpc_StatusResponse?) -> Int {
+    let value = Int(status?.chargeLimitStepPercent ?? 0)
+    return value > 0 ? value : 10
+}
+
+func chargeLimitAllowedPercents(for status: Rpc_StatusResponse?) -> [Int] {
+    guard let status else { return [] }
+    return status.chargeLimitAllowedPercents
+        .map(Int.init)
+        .filter { (0...100).contains($0) }
+        .sorted()
+}
+
+func chargeLimitWritable(for status: Rpc_StatusResponse?) -> Bool {
+    guard let status else { return false }
+    if status.chargeLimitBackend.isEmpty {
+        return true
+    }
+    return status.chargeLimitWritable
+}
+
+func normalizedChargeLimit(_ limit: Int, for status: Rpc_StatusResponse?) -> Int {
+    if limit >= 100 { return 100 }
+
+    let allowed = chargeLimitAllowedPercents(for: status)
+    if !allowed.isEmpty {
+        if allowed.contains(limit) { return limit }
+        return allowed.first(where: { limit <= $0 }) ?? allowed.last ?? limit
+    }
+
+    let minimum = chargeLimitMinPercent(for: status)
+    let maximum = chargeLimitMaxPercent(for: status)
+    return min(max(limit, minimum), maximum)
+}
+
+func isPreferredChargeLimit(_ limit: Int, for status: Rpc_StatusResponse?) -> Bool {
+    limit < 100 && normalizedChargeLimit(limit, for: status) == limit
+}
+
+@MainActor
+class DaemonClient: ObservableObject {
         @Published var connectionState: ConnectionState = .disconnected
         @Published var installerState: InstallerState = .unknown
         
@@ -54,7 +103,7 @@ struct UserIntent: Equatable {
                     log("Saved menu bar display style: \(userIntent.menuBarDisplayStyle.rawValue)")
                 }
                 if userIntent.preferredChargeLimit != oldValue.preferredChargeLimit,
-                   (60...99).contains(userIntent.preferredChargeLimit) {
+                   isPreferredChargeLimit(userIntent.preferredChargeLimit, for: status) {
                     preferences.setPreferredChargeLimit(userIntent.preferredChargeLimit)
                     log("Saved preferred charge limit: \(userIntent.preferredChargeLimit)%")
                 }
@@ -117,7 +166,7 @@ struct UserIntent: Equatable {
 
         // App<->daemon compatibility contract.
         private let expectedAPIMajor: UInt32 = 1
-        private let minimumAPIMinor: UInt32 = 2
+        private let minimumAPIMinor: UInt32 = 3
         
         init() {
             var initialIntent = UserIntent()
@@ -271,7 +320,7 @@ struct UserIntent: Equatable {
 
                 // Determine Auto cutoff: use active user limit (<100) or preferred limit if Off (100)
                 let activeLimit = Int(response.chargeLimit)
-                let preferred = self.userIntent.preferredChargeLimit
+                let preferred = normalizedChargeLimit(self.userIntent.preferredChargeLimit, for: response)
                 let autoCutoffRaw = (activeLimit < 100 ? activeLimit : preferred)
                 let autoCutoff = min(max(autoCutoffRaw, 60), 99)
 
@@ -294,7 +343,7 @@ struct UserIntent: Equatable {
 
                 let intentFromServer = UserIntent(
                     chargeLimit: Int(response.chargeLimit),
-                    preferredChargeLimit: (response.chargeLimit < 100 ? Int(response.chargeLimit) : self.userIntent.preferredChargeLimit),
+                    preferredChargeLimit: (response.chargeLimit < 100 ? normalizedChargeLimit(Int(response.chargeLimit), for: response) : preferred),
                     preventDisplaySleep: response.preventDisplaySleepActive,
                     preventSystemSleep: response.preventSystemSleepActive,
                     controlMagsafeLED: response.magsafeLedControlActive,
@@ -471,13 +520,14 @@ struct UserIntent: Equatable {
         }
         
         func setLimit(_ newLimit: Int) async {
-            log("Setting charge limit to \(newLimit)%")
+            let normalizedLimit = normalizedChargeLimit(newLimit, for: status)
+            log("Setting charge limit to \(normalizedLimit)%")
             guard let client = self.client else { return }
             guard evaluateCompatibility() else { return }
             
             var request = Rpc_MutationRequest()
             request.operation = .setChargeLimit
-            request.limit = Int32(newLimit)
+            request.limit = Int32(normalizedLimit)
             
             do {
                 _ = try await client.applyMutation(request)
@@ -495,8 +545,8 @@ struct UserIntent: Equatable {
                 print("Error setting limit: \(error)")
             }
             
-            if newLimit < 100 {
-                self.userIntent.preferredChargeLimit = newLimit
+            if normalizedLimit < 100 {
+                self.userIntent.preferredChargeLimit = normalizedLimit
             }
 
             await fetchStatus()
@@ -657,8 +707,9 @@ struct UserIntent: Equatable {
         }
 
         func setPreferredChargeLimit(_ limit: Int) {
-            guard (60...99).contains(limit) else { return }
-            userIntent.preferredChargeLimit = limit
+            let normalizedLimit = normalizedChargeLimit(limit, for: status)
+            guard isPreferredChargeLimit(normalizedLimit, for: status) else { return }
+            userIntent.preferredChargeLimit = normalizedLimit
         }
 
         func refreshRunAtLoginStatus() {

@@ -13,7 +13,7 @@ import UserNotifications
 struct PowerGridApp: App {
     @StateObject private var client = DaemonClient()
     private let notificationHandler = NotificationActionHandler()
-    
+
     let timer = Timer.publish(every: 5, on: .main, in: .common).autoconnect()
 
     var body: some Scene {
@@ -259,8 +259,8 @@ struct MainControlsView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            // Compute the Auto cutoff (user limit when <100, else preferred; clamped 60–99)
-            let userLimit = (client.userIntent.chargeLimit < 100) ? client.userIntent.chargeLimit : client.userIntent.preferredChargeLimit
+            let preferredLimit = normalizedChargeLimit(client.userIntent.preferredChargeLimit, for: status)
+            let userLimit = (client.userIntent.chargeLimit < 100) ? client.userIntent.chargeLimit : preferredLimit
             let autoCutoff = min(max(userLimit, 60), 99)
 
             HeaderView(
@@ -572,6 +572,15 @@ struct BatteryDetailsView: View {
 struct ControlsView: View {
     @ObservedObject var client: DaemonClient
     
+    private var status: Rpc_StatusResponse? { client.status }
+    private var isChargeLimitWritable: Bool { chargeLimitWritable(for: status) }
+    private var chargeLimitRange: ClosedRange<Double> {
+        Double(chargeLimitMinPercent(for: status))...Double(chargeLimitMaxPercent(for: status))
+    }
+    private var chargeLimitStep: Double {
+        Double(max(chargeLimitStepPercent(for: status), 1))
+    }
+
     private var chargeLimitValueText: String {
         if client.userIntent.chargeLimit >= 100 {
             return "Off"
@@ -587,7 +596,7 @@ struct ControlsView: View {
                 Spacer()
                 Text(chargeLimitValueText)
             }
-            Slider(value: chargeLimitBinding(), in: 60...100, step: 10) {
+            Slider(value: chargeLimitBinding(), in: chargeLimitRange, step: chargeLimitStep) {
             } onEditingChanged: { isEditing in
                 if !isEditing {
                     Task {
@@ -595,6 +604,8 @@ struct ControlsView: View {
                     }
                 }
             }
+            .disabled(!isChargeLimitWritable)
+            .opacity(isChargeLimitWritable ? 1.0 : 0.45)
         }
     }
 }
@@ -602,9 +613,9 @@ struct ControlsView: View {
 extension ControlsView {
     private func chargeLimitBinding() -> Binding<Double> {
         Binding<Double>(
-            get: { Double(client.userIntent.chargeLimit) },
+            get: { Double(normalizedChargeLimit(client.userIntent.chargeLimit, for: status)) },
             set: {
-                let value = Int($0)
+                let value = normalizedChargeLimit(Int($0), for: status)
                 client.userIntent.chargeLimit = value
                 if value < 100 {
                     client.setPreferredChargeLimit(value)
@@ -666,7 +677,8 @@ struct QuickActionsView: View {
         let columnsCount = max(1, min(4, actionsCount))
         let columns = Array(repeating: GridItem(.flexible()), count: columnsCount)
         let adapterPresent = (Int(status.adapterMaxWatts) > 0)
-        let userLimit = (client.userIntent.chargeLimit < 100) ? client.userIntent.chargeLimit : client.userIntent.preferredChargeLimit
+        let preferredLimit = normalizedChargeLimit(client.userIntent.preferredChargeLimit, for: status)
+        let userLimit = (client.userIntent.chargeLimit < 100) ? client.userIntent.chargeLimit : preferredLimit
         let currentCharge = currentBatteryPercent(for: status, intent: client.userIntent)
         // Auto is only meaningful when current charge is ABOVE the cutoff;
         // disable/hide Auto at or below the user limit, or when no adapter.
@@ -748,8 +760,8 @@ struct QuickActionsView: View {
                         value: true,
                         imageName: "lock.fill",
                         tint: .green,
-                        help: "Charging limited to \(client.userIntent.preferredChargeLimit)%",
-                        accessibilityLabel: "Limit On (\(client.userIntent.preferredChargeLimit)%)"
+                        help: "Charging limited to \(preferredLimit)%",
+                        accessibilityLabel: "Limit On (\(preferredLimit)%)"
                     )
                 ],
                 selection: limitBinding(),
@@ -758,10 +770,12 @@ struct QuickActionsView: View {
                 showsCaption: false,
                 isActiveProvider: { $0 },
                 onChange: { isOn in
-                    let newLimit = isOn ? client.userIntent.preferredChargeLimit : 100
+                    let newLimit = isOn ? preferredLimit : 100
                     Task { await client.setLimit(newLimit) }
                 }
             )
+            .disabled(!chargeLimitWritable(for: status))
+            .opacity(chargeLimitWritable(for: status) ? 1.0 : 0.45)
 
             MultiStateActionButton<Bool>(
                 title: "Low Power",
@@ -803,7 +817,8 @@ struct QuickActionsView: View {
         Binding<Bool>(
             get: { client.userIntent.chargeLimit < 100 },
             set: { turnOn in
-                let newLimit = turnOn ? client.userIntent.preferredChargeLimit : 100
+                let preferredLimit = normalizedChargeLimit(client.userIntent.preferredChargeLimit, for: status)
+                let newLimit = turnOn ? preferredLimit : 100
                 client.userIntent.chargeLimit = newLimit
             }
         )

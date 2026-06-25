@@ -33,7 +33,7 @@ const (
 	preSleepBudget     = 5 * time.Second
 	wakeHoldDuration   = 30 * time.Second
 	apiMajor           = uint32(1)
-	apiMinor           = uint32(2)
+	apiMinor           = uint32(3)
 )
 
 var logger = oslogger.NewLogger(logSubsystem, "Daemon")
@@ -41,6 +41,7 @@ var logger = oslogger.NewLogger(logSubsystem, "Daemon")
 var (
 	streamSystemEventsFn = powerkit.StreamSystemEventsWithHooks
 	setChargingStateFn   = powerkit.SetChargingState
+	setChargeLimitFn     = powerkit.SetChargeLimit
 	getSystemInfoFn      = powerkit.GetSystemInfo
 	nowFn                = time.Now
 )
@@ -53,6 +54,8 @@ type Daemon struct {
 	currentLimit                   int32
 	lastIOKitStatus                *powerkit.IOKitData
 	lastSMCStatus                  *powerkit.SMCData
+	lastChargeLimitCapability      powerkit.ChargeLimitCapability
+	lastAppliedNativeChargeLimit   int32
 	lastBatteryWattage             float32
 	lastAdapterWattage             float32
 	lastSystemWattage              float32
@@ -93,12 +96,109 @@ func chargeForPolicy(b powerkit.IOKitBattery, useHardware bool) int {
 	return b.CurrentCharge
 }
 
+func defaultChargeLimitCapability() powerkit.ChargeLimitCapability {
+	return powerkit.ChargeLimitCapability{
+		Available: false,
+		Writable:  false,
+		Backend:   powerkit.ChargeLimitBackendUnavailable,
+	}
+}
+
+func smcChargeLimitCapability() powerkit.ChargeLimitCapability {
+	return powerkit.ChargeLimitCapability{
+		Available:   true,
+		Writable:    true,
+		Backend:     powerkit.ChargeLimitBackendSMCInhibit,
+		MinPercent:  60,
+		MaxPercent:  100,
+		StepPercent: 10,
+		Reason:      "smc_control",
+	}
+}
+
+func selectedChargeLimitCapability(cap powerkit.ChargeLimitCapability) powerkit.ChargeLimitCapability {
+	if cap.Backend == "" {
+		return defaultChargeLimitCapability()
+	}
+	return cap
+}
+
+func chargeLimitCapabilityFromInfo(info *powerkit.SystemInfo) powerkit.ChargeLimitCapability {
+	if info == nil {
+		return defaultChargeLimitCapability()
+	}
+	capability := selectedChargeLimitCapability(info.Controls.ChargeLimit)
+	if capability.Available {
+		return capability
+	}
+	if info.SMC != nil && info.SMC.State.ChargingControlAvailable {
+		return smcChargeLimitCapability()
+	}
+	return capability
+}
+
+func intSliceToInt32(values []int) []int32 {
+	if len(values) == 0 {
+		return nil
+	}
+	out := make([]int32, len(values))
+	for i, value := range values {
+		out[i] = int32(value)
+	}
+	return out
+}
+
+func normalizeLimitForCapability(limit int32, cap powerkit.ChargeLimitCapability) int32 {
+	cap = selectedChargeLimitCapability(cap)
+	if !cap.Available || cap.Backend == powerkit.ChargeLimitBackendUnavailable || cap.Allows(int(limit)) {
+		return limit
+	}
+
+	if len(cap.AllowedPercents) > 0 {
+		for _, allowed := range cap.AllowedPercents {
+			if int(limit) <= allowed {
+				return int32(allowed)
+			}
+		}
+		return int32(cap.AllowedPercents[len(cap.AllowedPercents)-1])
+	}
+	if cap.MinPercent > 0 && int(limit) < cap.MinPercent {
+		return int32(cap.MinPercent)
+	}
+	if cap.MaxPercent > 0 && int(limit) > cap.MaxPercent {
+		return int32(cap.MaxPercent)
+	}
+	return limit
+}
+
+func (s *Daemon) chargeLimitCapabilityLocked() powerkit.ChargeLimitCapability {
+	capability := selectedChargeLimitCapability(s.lastChargeLimitCapability)
+	if capability.Available {
+		return capability
+	}
+	if s.lastSMCStatus != nil && s.lastSMCStatus.State.ChargingControlAvailable {
+		return smcChargeLimitCapability()
+	}
+	return capability
+}
+
 func (s *Daemon) GetStatus(_ context.Context, _ *rpc.Empty) (*rpc.StatusResponse, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	if s.lastIOKitStatus == nil {
-		return &rpc.StatusResponse{ChargeLimit: s.currentLimit, AdapterDescription: "Initializing..."}, nil
+		capability := s.chargeLimitCapabilityLocked()
+		return &rpc.StatusResponse{
+			ChargeLimit:                s.currentLimit,
+			AdapterDescription:         "Initializing...",
+			ChargeLimitBackend:         string(capability.Backend),
+			ChargeLimitAvailable:       capability.Available,
+			ChargeLimitWritable:        capability.Writable,
+			ChargeLimitMinPercent:      int32(capability.MinPercent),
+			ChargeLimitMaxPercent:      int32(capability.MaxPercent),
+			ChargeLimitStepPercent:     int32(capability.StepPercent),
+			ChargeLimitAllowedPercents: intSliceToInt32(capability.AllowedPercents),
+		}, nil
 	}
 
 	smcChargingEnabled := true
@@ -112,6 +212,7 @@ func (s *Daemon) GetStatus(_ context.Context, _ *rpc.Empty) (*rpc.StatusResponse
 		smcAdapterAvailable = s.lastSMCStatus.State.AdapterControlAvailable
 	}
 
+	capability := s.chargeLimitCapabilityLocked()
 	resp := &rpc.StatusResponse{
 		CurrentCharge:                   int32(s.lastIOKitStatus.Battery.CurrentCharge),
 		IsCharging:                      s.lastIOKitStatus.State.IsCharging,
@@ -135,6 +236,13 @@ func (s *Daemon) GetStatus(_ context.Context, _ *rpc.Empty) (*rpc.StatusResponse
 		ForceDischargeActive:            smcAdapterAvailable && !smcAdapterEnabled,
 		SmcChargingEnabled:              smcChargingEnabled,
 		SmcAdapterEnabled:               smcAdapterEnabled,
+		ChargeLimitBackend:              string(capability.Backend),
+		ChargeLimitAvailable:            capability.Available,
+		ChargeLimitWritable:             capability.Writable,
+		ChargeLimitMinPercent:           int32(capability.MinPercent),
+		ChargeLimitMaxPercent:           int32(capability.MaxPercent),
+		ChargeLimitStepPercent:          int32(capability.StepPercent),
+		ChargeLimitAllowedPercents:      intSliceToInt32(capability.AllowedPercents),
 	}
 	resp.MagsafeLedControlActive = s.wantMagsafeLED
 	resp.MagsafeLedSupported = s.ledSupported
@@ -192,6 +300,7 @@ func (s *Daemon) GetDaemonInfo(_ context.Context, _ *rpc.Empty) (*rpc.DaemonInfo
 		Capabilities: []string{
 			"apply-mutation",
 			"daemon-info",
+			"charge-limit-capability",
 			"hardware-charge-percent",
 			"hardware-charge-percent-enforcement",
 		},
@@ -202,22 +311,53 @@ func (s *Daemon) applySetChargeLimit(newLimit int32) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if newLimit < 60 || newLimit > 100 {
+	if newLimit < 0 || newLimit > 100 {
 		return status.Errorf(codes.InvalidArgument, "charge limit out of range: %d", newLimit)
 	}
 
+	capability := s.chargeLimitCapabilityLocked()
+	if capability.Backend == powerkit.ChargeLimitBackendUnavailable {
+		if info, err := getSystemInfoWithTimeout(opTimeout); err == nil {
+			s.updateCachedStatusLocked(info)
+			capability = s.chargeLimitCapabilityLocked()
+		} else {
+			logger.Error("Failed to refresh charge-limit capability: %v", err)
+		}
+	}
+
+	effectiveLimit := newLimit
 	if s.currentConsoleUser == nil {
 		logger.Default("SetChargeLimit requested with no console user; using daemon default %d%%", defaultChargeLimit)
-		s.currentLimit = defaultChargeLimit
+		effectiveLimit = defaultChargeLimit
 	} else {
+		effectiveLimit = newLimit
+	}
+
+	if !capability.Available || !capability.Writable {
+		return status.Errorf(codes.FailedPrecondition, "charge limit backend unavailable")
+	}
+	if !capability.Allows(int(effectiveLimit)) {
+		return status.Errorf(codes.InvalidArgument, "charge limit %d is not allowed for backend %s", effectiveLimit, capability.Backend)
+	}
+
+	if capability.Backend == powerkit.ChargeLimitBackendNativeMacOS {
+		if err := callWithTimeout(opTimeout, func() error {
+			return setChargeLimitFn(int(effectiveLimit))
+		}); err != nil {
+			return status.Errorf(codes.Internal, "failed to set native charge limit: %v", err)
+		}
+		s.lastAppliedNativeChargeLimit = effectiveLimit
+	}
+
+	if s.currentConsoleUser != nil {
 		u := s.currentConsoleUser
-		if err := cfg.WriteUserChargeLimit(u.HomeDir, u.UID, u.GID, int(newLimit)); err != nil {
+		if err := cfg.WriteUserChargeLimit(u.HomeDir, u.UID, u.GID, int(effectiveLimit)); err != nil {
 			logger.Error("Failed to persist user charge limit for %s: %v", u.Username, err)
 		} else {
-			logger.Default("Persisted user charge limit %d%% for %s", newLimit, u.Username)
+			logger.Default("Persisted user charge limit %d%% for %s", effectiveLimit, u.Username)
 		}
-		s.currentLimit = newLimit
 	}
+	s.currentLimit = effectiveLimit
 	s.reconcileSleepChargingStateLocked()
 
 	s.runChargingLogicLocked(nil)
@@ -403,7 +543,7 @@ func (s *Daemon) startBatteryCoalescer(ctx context.Context) {
 }
 
 func (s *Daemon) reconcileSleepChargingStateLocked() {
-	if s.wantDisableChargingBeforeSleep && s.currentLimit < 100 {
+	if s.wantDisableChargingBeforeSleep && s.currentLimit < 100 && s.chargeLimitCapabilityLocked().Backend == powerkit.ChargeLimitBackendSMCInhibit {
 		return
 	}
 	if s.sleepTransitionActive || !s.wakeHoldUntil.IsZero() {
@@ -419,6 +559,18 @@ func (s *Daemon) updateCachedStatusLocked(info *powerkit.SystemInfo) {
 	}
 	s.lastIOKitStatus = info.IOKit
 	s.lastSMCStatus = info.SMC
+	s.lastChargeLimitCapability = chargeLimitCapabilityFromInfo(info)
+	normalizedLimit := normalizeLimitForCapability(s.currentLimit, s.lastChargeLimitCapability)
+	if normalizedLimit != s.currentLimit {
+		logger.Default(
+			"Adjusted charge limit from %d%% to %d%% for backend %s.",
+			s.currentLimit,
+			normalizedLimit,
+			s.lastChargeLimitCapability.Backend,
+		)
+		s.currentLimit = normalizedLimit
+	}
+	s.reconcileSleepChargingStateLocked()
 
 	if info.IOKit != nil {
 		s.lastBatteryWattage = float32(info.IOKit.Calculations.BatteryPower)
@@ -472,8 +624,43 @@ func (s *Daemon) runChargingLogicLocked(info *powerkit.SystemInfo) {
 
 	s.updateCachedStatusLocked(info)
 
-	if info.IOKit == nil || info.SMC == nil {
+	if info.IOKit == nil {
 		logger.Default("Skipping logic run due to incomplete data.")
+		return
+	}
+
+	capability := s.chargeLimitCapabilityLocked()
+	limit := int(s.currentLimit)
+	if capability.Backend == powerkit.ChargeLimitBackendNativeMacOS {
+		if capability.Writable && capability.Allows(limit) && s.lastAppliedNativeChargeLimit != s.currentLimit {
+			logger.Default("Applying native macOS charge limit %d%%.", limit)
+			if err := callWithTimeout(opTimeout, func() error {
+				return setChargeLimitFn(limit)
+			}); err != nil {
+				logger.Error("Failed to apply native macOS charge limit: %v", err)
+			} else {
+				s.lastAppliedNativeChargeLimit = s.currentLimit
+			}
+		}
+		s.applyMagsafeLED(info)
+		return
+	}
+
+	if !capability.Available || capability.Backend == powerkit.ChargeLimitBackendUnavailable {
+		logger.Default("Skipping charging logic because no charge-limit backend is available.")
+		s.applyMagsafeLED(info)
+		return
+	}
+
+	if capability.Backend != powerkit.ChargeLimitBackendSMCInhibit {
+		logger.Default("Skipping charging logic because backend %s is not SMC inhibition.", capability.Backend)
+		s.applyMagsafeLED(info)
+		return
+	}
+
+	if info.SMC == nil {
+		logger.Default("Skipping SMC charging logic because SMC data is unavailable.")
+		s.applyMagsafeLED(info)
 		return
 	}
 	if !info.SMC.State.ChargingControlAvailable {
@@ -483,7 +670,6 @@ func (s *Daemon) runChargingLogicLocked(info *powerkit.SystemInfo) {
 	}
 
 	charge := chargeForPolicy(info.IOKit.Battery, s.wantHardwareBatteryPercentage)
-	limit := int(s.currentLimit)
 	isSMCChargingEnabled := info.SMC.State.IsChargingEnabled
 	now := nowFn()
 	s.clearExpiredWakeHoldLocked(now)
@@ -723,11 +909,19 @@ func (s *Daemon) handleBeforeSleep() {
 	s.mu.Lock()
 	enforce := s.wantDisableChargingBeforeSleep
 	limit := int(s.currentLimit)
+	capability := s.chargeLimitCapabilityLocked()
 	if !enforce {
 		s.sleepTransitionActive = false
 		s.wakeHoldUntil = time.Time{}
 		s.mu.Unlock()
 		logger.Default("Pre-sleep charging hook skipped because Disable Charging before Sleep is off.")
+		return
+	}
+	if capability.Backend != powerkit.ChargeLimitBackendSMCInhibit {
+		s.sleepTransitionActive = false
+		s.wakeHoldUntil = time.Time{}
+		s.mu.Unlock()
+		logger.Default("Pre-sleep charging hook skipped because backend %s does not support SMC charging disable.", capability.Backend)
 		return
 	}
 	if limit >= 100 {
@@ -818,7 +1012,8 @@ func (s *Daemon) handleWake() {
 
 	s.mu.Lock()
 	s.sleepTransitionActive = false
-	if s.wantDisableChargingBeforeSleep && s.currentLimit < 100 {
+	capability := s.chargeLimitCapabilityLocked()
+	if s.wantDisableChargingBeforeSleep && s.currentLimit < 100 && capability.Backend == powerkit.ChargeLimitBackendSMCInhibit {
 		s.wakeHoldUntil = now.Add(wakeHoldDuration)
 		until := s.wakeHoldUntil
 		s.mu.Unlock()
@@ -944,8 +1139,14 @@ func Run(buildID string, buildIDSource string, buildDirty bool) error {
 }
 
 func (s *Daemon) applyMagsafeLED(info *powerkit.SystemInfo) {
-	if !s.wantMagsafeLED || !s.ledSupported {
+	if !s.wantMagsafeLED || !s.ledSupported || info == nil || info.IOKit == nil {
 		return
+	}
+	smcChargingEnabled := true
+	forceDischarge := false
+	if info.SMC != nil {
+		smcChargingEnabled = info.SMC.State.IsChargingEnabled
+		forceDischarge = info.SMC.State.AdapterControlAvailable && !info.SMC.State.IsAdapterEnabled
 	}
 	charge := chargeForPolicy(info.IOKit.Battery, s.wantHardwareBatteryPercentage)
 	target, ok := engine.DecideMagsafeLED(engine.LEDInput{
@@ -954,8 +1155,8 @@ func (s *Daemon) applyMagsafeLED(info *powerkit.SystemInfo) {
 		Limit:              int(s.currentLimit),
 		IsCharging:         info.IOKit.State.IsCharging,
 		IsConnected:        info.IOKit.State.IsConnected,
-		SMCChargingEnabled: info.SMC.State.IsChargingEnabled,
-		ForceDischarge:     info.SMC.State.AdapterControlAvailable && !info.SMC.State.IsAdapterEnabled,
+		SMCChargingEnabled: smcChargingEnabled,
+		ForceDischarge:     forceDischarge,
 	})
 	if !ok {
 		return

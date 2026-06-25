@@ -172,7 +172,11 @@ func handleLimit(client *commandClient, args []string, stdout io.Writer) error {
 		return fmt.Errorf("usage: powergridctl limit [60-100|off]")
 	}
 
-	limit, err := parseLimitValue(args[0])
+	status, err := client.getStatus()
+	if err != nil {
+		return err
+	}
+	limit, err := parseLimitValueForStatus(args[0], status)
 	if err != nil {
 		return err
 	}
@@ -326,6 +330,10 @@ func (c *commandClient) setPowerFeature(feature rpc.PowerFeature, enable bool) e
 }
 
 func parseLimitValue(arg string) (int32, error) {
+	return parseLimitValueForStatus(arg, nil)
+}
+
+func parseLimitValueForStatus(arg string, status *rpc.StatusResponse) (int32, error) {
 	if strings.EqualFold(arg, stateOff) {
 		return 100, nil
 	}
@@ -334,10 +342,49 @@ func parseLimitValue(arg string) (int32, error) {
 	if err != nil {
 		return 0, fmt.Errorf("invalid limit %q", arg)
 	}
+	if status != nil && status.GetChargeLimitBackend() != "" {
+		if !status.GetChargeLimitAvailable() {
+			return 0, fmt.Errorf("charge limit backend is unavailable")
+		}
+		if !status.GetChargeLimitWritable() {
+			return 0, fmt.Errorf("charge limit backend is unavailable")
+		}
+		if allowed := status.GetChargeLimitAllowedPercents(); len(allowed) > 0 {
+			for _, value := range allowed {
+				if int32(limit) == value {
+					return int32(limit), nil
+				}
+			}
+			return 0, fmt.Errorf("limit must be one of %s, or 'off'", formatAllowedLimits(allowed))
+		}
+		minLimit := status.GetChargeLimitMinPercent()
+		maxLimit := status.GetChargeLimitMaxPercent()
+		if minLimit > 0 || maxLimit > 0 {
+			if minLimit == 0 {
+				minLimit = 60
+			}
+			if maxLimit == 0 {
+				maxLimit = 100
+			}
+			if int32(limit) < minLimit || int32(limit) > maxLimit {
+				return 0, fmt.Errorf("limit must be between %d and %d, or 'off'", minLimit, maxLimit)
+			}
+			return int32(limit), nil
+		}
+	}
+
 	if limit < 60 || limit > 100 {
 		return 0, fmt.Errorf("limit must be between 60 and 100, or 'off'")
 	}
 	return int32(limit), nil
+}
+
+func formatAllowedLimits(values []int32) string {
+	parts := make([]string, len(values))
+	for i, value := range values {
+		parts[i] = fmt.Sprintf("%d", value)
+	}
+	return strings.Join(parts, ", ")
 }
 
 func formatLimit(limit int32) string {
