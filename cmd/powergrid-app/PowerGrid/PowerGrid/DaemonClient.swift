@@ -117,7 +117,7 @@ struct UserIntent: Equatable {
 
         // App<->daemon compatibility contract.
         private let expectedAPIMajor: UInt32 = 1
-        private let minimumAPIMinor: UInt32 = 0
+        private let minimumAPIMinor: UInt32 = 2
         
         init() {
             var initialIntent = UserIntent()
@@ -283,7 +283,8 @@ struct UserIntent: Equatable {
                     if self.userIntent.forceDischargeMode == .auto {
                         // If Auto was selected and forced discharge is no longer active
                         // and we're at/below the cutoff, reflect Off in UI.
-                        if !response.forceDischargeActive && Int(response.currentCharge) <= autoCutoff {
+                        let currentCharge = currentBatteryPercent(for: response, intent: self.userIntent)
+                        if !response.forceDischargeActive && currentCharge <= autoCutoff {
                             return .off
                         }
                         return .auto
@@ -302,7 +303,7 @@ struct UserIntent: Equatable {
                     menuBarDisplayStyle: self.userIntent.menuBarDisplayStyle,
                     lowPowerNotificationsEnabled: self.userIntent.lowPowerNotificationsEnabled,
                     showBatteryDetails: self.userIntent.showBatteryDetails,
-                    showHardwareBatteryPercentage: self.userIntent.showHardwareBatteryPercentage
+                    showHardwareBatteryPercentage: response.hardwareBatteryPercentageActive
                 )
                 
                 if self.userIntent != intentFromServer {

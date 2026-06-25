@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"math"
 	"os"
 	"os/signal"
 	"sync"
@@ -32,7 +33,7 @@ const (
 	preSleepBudget     = 5 * time.Second
 	wakeHoldDuration   = 30 * time.Second
 	apiMajor           = uint32(1)
-	apiMinor           = uint32(1)
+	apiMinor           = uint32(2)
 )
 
 var logger = oslogger.NewLogger(logSubsystem, "Daemon")
@@ -60,6 +61,7 @@ type Daemon struct {
 	wantPreventSystemSleep         bool
 	wantMagsafeLED                 bool
 	wantDisableChargingBeforeSleep bool
+	wantHardwareBatteryPercentage  bool
 	sleepTransitionActive          bool
 	wakeHoldUntil                  time.Time
 	ledSupported                   bool
@@ -72,6 +74,25 @@ type Daemon struct {
 
 // Low Power Mode is read via powerkit-go's cached helper; no extra cache needed here.
 
+func hardwareRoundedCharge(b powerkit.IOKitBattery) (int, bool) {
+	if !b.HardwareChargeAvailable {
+		return 0, false
+	}
+	if b.HardwareChargePercentPrecise > 0 {
+		return int(math.Floor(b.HardwareChargePercentPrecise + 0.5)), true
+	}
+	return b.HardwareChargePercent, true
+}
+
+func chargeForPolicy(b powerkit.IOKitBattery, useHardware bool) int {
+	if useHardware {
+		if charge, ok := hardwareRoundedCharge(b); ok {
+			return charge
+		}
+	}
+	return b.CurrentCharge
+}
+
 func (s *Daemon) GetStatus(_ context.Context, _ *rpc.Empty) (*rpc.StatusResponse, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -80,35 +101,40 @@ func (s *Daemon) GetStatus(_ context.Context, _ *rpc.Empty) (*rpc.StatusResponse
 		return &rpc.StatusResponse{ChargeLimit: s.currentLimit, AdapterDescription: "Initializing..."}, nil
 	}
 
-	resp := &rpc.StatusResponse{
-		CurrentCharge:             int32(s.lastIOKitStatus.Battery.CurrentCharge),
-		IsCharging:                s.lastIOKitStatus.State.IsCharging,
-		IsConnected:               s.lastIOKitStatus.State.IsConnected,
-		ChargeLimit:               s.currentLimit,
-		IsChargeLimited:           !s.lastSMCStatus.State.IsChargingEnabled,
-		CycleCount:                int32(s.lastIOKitStatus.Battery.CycleCount),
-		AdapterDescription:        s.lastIOKitStatus.Adapter.Description,
-		AdapterMaxWatts:           int32(s.lastIOKitStatus.Adapter.MaxWatts),
-		BatteryWattage:            s.lastBatteryWattage,
-		AdapterWattage:            s.lastAdapterWattage,
-		SystemWattage:             s.lastSystemWattage,
-		HealthByMax:               int32(s.lastIOKitStatus.Calculations.HealthByMaxCapacity),
-		AdapterInputVoltage:       float32(s.lastIOKitStatus.Adapter.InputVoltage),
-		AdapterInputAmperage:      float32(s.lastIOKitStatus.Adapter.InputAmperage),
-		TimeToFullMinutes:         int32(s.lastIOKitStatus.Battery.TimeToFull),
-		TimeToEmptyMinutes:        int32(s.lastIOKitStatus.Battery.TimeToEmpty),
-		PreventDisplaySleepActive: s.wantPreventDisplaySleep,
-		PreventSystemSleepActive:  s.wantPreventSystemSleep,
-		ForceDischargeActive: func() bool {
-			if s.lastSMCStatus != nil {
-				return !s.lastSMCStatus.State.IsAdapterEnabled
-			}
-			return false
-		}(),
-	}
+	smcChargingEnabled := true
+	smcChargingAvailable := false
+	smcAdapterEnabled := true
+	smcAdapterAvailable := false
 	if s.lastSMCStatus != nil {
-		resp.SmcChargingEnabled = s.lastSMCStatus.State.IsChargingEnabled
-		resp.SmcAdapterEnabled = s.lastSMCStatus.State.IsAdapterEnabled
+		smcChargingEnabled = s.lastSMCStatus.State.IsChargingEnabled
+		smcChargingAvailable = s.lastSMCStatus.State.ChargingControlAvailable
+		smcAdapterEnabled = s.lastSMCStatus.State.IsAdapterEnabled
+		smcAdapterAvailable = s.lastSMCStatus.State.AdapterControlAvailable
+	}
+
+	resp := &rpc.StatusResponse{
+		CurrentCharge:                   int32(s.lastIOKitStatus.Battery.CurrentCharge),
+		IsCharging:                      s.lastIOKitStatus.State.IsCharging,
+		IsConnected:                     s.lastIOKitStatus.State.IsConnected,
+		ChargeLimit:                     s.currentLimit,
+		IsChargeLimited:                 smcChargingAvailable && !smcChargingEnabled,
+		CycleCount:                      int32(s.lastIOKitStatus.Battery.CycleCount),
+		AdapterDescription:              s.lastIOKitStatus.Adapter.Description,
+		AdapterMaxWatts:                 int32(s.lastIOKitStatus.Adapter.MaxWatts),
+		BatteryWattage:                  s.lastBatteryWattage,
+		AdapterWattage:                  s.lastAdapterWattage,
+		SystemWattage:                   s.lastSystemWattage,
+		HealthByMax:                     int32(s.lastIOKitStatus.Calculations.HealthByMaxCapacity),
+		AdapterInputVoltage:             float32(s.lastIOKitStatus.Adapter.InputVoltage),
+		AdapterInputAmperage:            float32(s.lastIOKitStatus.Adapter.InputAmperage),
+		TimeToFullMinutes:               int32(s.lastIOKitStatus.Battery.TimeToFull),
+		TimeToEmptyMinutes:              int32(s.lastIOKitStatus.Battery.TimeToEmpty),
+		PreventDisplaySleepActive:       s.wantPreventDisplaySleep,
+		PreventSystemSleepActive:        s.wantPreventSystemSleep,
+		HardwareBatteryPercentageActive: s.wantHardwareBatteryPercentage,
+		ForceDischargeActive:            smcAdapterAvailable && !smcAdapterEnabled,
+		SmcChargingEnabled:              smcChargingEnabled,
+		SmcAdapterEnabled:               smcAdapterEnabled,
 	}
 	resp.MagsafeLedControlActive = s.wantMagsafeLED
 	resp.MagsafeLedSupported = s.ledSupported
@@ -167,6 +193,7 @@ func (s *Daemon) GetDaemonInfo(_ context.Context, _ *rpc.Empty) (*rpc.DaemonInfo
 			"apply-mutation",
 			"daemon-info",
 			"hardware-charge-percent",
+			"hardware-charge-percent-enforcement",
 		},
 	}, nil
 }
@@ -268,6 +295,13 @@ func (s *Daemon) applyPowerFeature(feature rpc.PowerFeature, enable bool) error 
 			_ = cfg.WriteUserDisableChargingBeforeSleep(s.currentConsoleUser.HomeDir, s.currentConsoleUser.UID, s.currentConsoleUser.GID, enable)
 		}
 		s.reconcileSleepChargingStateLocked()
+		s.mu.Unlock()
+	case rpc.PowerFeature_USE_HARDWARE_BATTERY_PERCENTAGE:
+		s.mu.Lock()
+		s.wantHardwareBatteryPercentage = enable
+		if s.currentConsoleUser != nil {
+			_ = cfg.WriteUserHardwareBatteryPercentage(s.currentConsoleUser.HomeDir, s.currentConsoleUser.UID, s.currentConsoleUser.GID, enable)
+		}
 		s.mu.Unlock()
 	case rpc.PowerFeature_LOW_POWER_MODE:
 		// Use powerkit-go to set Low Power Mode (requires root; daemon runs as root)
@@ -442,8 +476,13 @@ func (s *Daemon) runChargingLogicLocked(info *powerkit.SystemInfo) {
 		logger.Default("Skipping logic run due to incomplete data.")
 		return
 	}
+	if !info.SMC.State.ChargingControlAvailable {
+		logger.Default("Skipping charging logic because SMC charging control is unavailable.")
+		s.applyMagsafeLED(info)
+		return
+	}
 
-	charge := info.IOKit.Battery.CurrentCharge
+	charge := chargeForPolicy(info.IOKit.Battery, s.wantHardwareBatteryPercentage)
 	limit := int(s.currentLimit)
 	isSMCChargingEnabled := info.SMC.State.IsChargingEnabled
 	now := nowFn()
@@ -612,6 +651,7 @@ func (s *Daemon) enterNoUser() {
 	s.wantPreventSystemSleep = false
 	s.wantMagsafeLED = profile.WantMagsafeLED
 	s.wantDisableChargingBeforeSleep = profile.WantDisableChargingBeforeSleep
+	s.wantHardwareBatteryPercentage = profile.WantHardwareBatteryPercentage
 	s.currentLimit = int32(profile.Limit)
 	s.reconcileSleepChargingStateLocked()
 	s.mu.Unlock()
@@ -654,6 +694,7 @@ func (s *Daemon) enterConsoleUser(u *consoleuser.ConsoleUser) {
 	s.wantPreventSystemSleep = false
 	s.wantMagsafeLED = profile.WantMagsafeLED
 	s.wantDisableChargingBeforeSleep = profile.WantDisableChargingBeforeSleep
+	s.wantHardwareBatteryPercentage = profile.WantHardwareBatteryPercentage
 	s.currentLimit = int32(profile.Limit)
 	s.reconcileSleepChargingStateLocked()
 	s.mu.Unlock()
@@ -762,6 +803,9 @@ func (s *Daemon) verifyChargingDisabled(deadline time.Time) (bool, error) {
 
 	if info.SMC == nil {
 		return false, fmt.Errorf("fresh status missing SMC data")
+	}
+	if !info.SMC.State.ChargingControlAvailable {
+		return false, fmt.Errorf("fresh status missing SMC charging control")
 	}
 
 	disabled := !info.SMC.State.IsChargingEnabled
@@ -903,14 +947,15 @@ func (s *Daemon) applyMagsafeLED(info *powerkit.SystemInfo) {
 	if !s.wantMagsafeLED || !s.ledSupported {
 		return
 	}
+	charge := chargeForPolicy(info.IOKit.Battery, s.wantHardwareBatteryPercentage)
 	target, ok := engine.DecideMagsafeLED(engine.LEDInput{
 		AdapterPresent:     info.IOKit != nil && info.IOKit.Adapter.MaxWatts > 0,
-		Charge:             info.IOKit.Battery.CurrentCharge,
+		Charge:             charge,
 		Limit:              int(s.currentLimit),
 		IsCharging:         info.IOKit.State.IsCharging,
 		IsConnected:        info.IOKit.State.IsConnected,
 		SMCChargingEnabled: info.SMC.State.IsChargingEnabled,
-		ForceDischarge:     !info.SMC.State.IsAdapterEnabled,
+		ForceDischarge:     info.SMC.State.AdapterControlAvailable && !info.SMC.State.IsAdapterEnabled,
 	})
 	if !ok {
 		return

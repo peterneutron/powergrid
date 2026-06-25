@@ -23,7 +23,7 @@ struct TimeEstimate: Equatable {
 
 func computeTimeEstimate(status: Rpc_StatusResponse, intent: UserIntent) -> TimeEstimate? {
     let adapterPresent = Int(status.adapterMaxWatts) > 0
-    let charge = Int(status.currentCharge)
+    let charge = currentBatteryPercent(for: status, intent: intent)
     let limit = Int(status.chargeLimit)
     let smcChargingEnabled = status.smcChargingEnabled
 

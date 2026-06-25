@@ -108,6 +108,7 @@ const (
 	KeyChargeLimit  = "ChargeLimit"
 	KeyMagsafeLED   = "ControlMagsafeLED"
 	KeyDisableCBS   = "DisableChargingBeforeSleep"
+	KeyHardwareBatt = "UseHardwareBatteryPercentage"
 )
 
 func clampLimit(v int) int {
@@ -287,6 +288,28 @@ func WriteUserDisableChargingBeforeSleep(homeDir string, uid, gid uint32, enable
 	}
 	path := userPlistPath(homeDir)
 	if err := writeBool(path, KeyDisableCBS, enabled); err != nil {
+		return err
+	}
+	return chownUserPlist(path, uid, gid)
+}
+
+func ReadUserHardwareBatteryPercentage(homeDir string) bool {
+	if homeDir == "" {
+		return false
+	}
+	val, found, err := readBool(userPlistPath(homeDir), KeyHardwareBatt)
+	if err != nil || !found {
+		return false
+	}
+	return val
+}
+
+func WriteUserHardwareBatteryPercentage(homeDir string, uid, gid uint32, enabled bool) error {
+	if homeDir == "" {
+		return os.ErrInvalid
+	}
+	path := userPlistPath(homeDir)
+	if err := writeBool(path, KeyHardwareBatt, enabled); err != nil {
 		return err
 	}
 	return chownUserPlist(path, uid, gid)

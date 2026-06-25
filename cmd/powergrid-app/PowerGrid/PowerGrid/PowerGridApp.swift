@@ -85,10 +85,10 @@ struct MenuBarLabelView: View {
                         case .iconAndText:
                             StatusTextLabel(status: status, useHardwareBatteryPercentage: useHardwarePercentage)
                                 .foregroundStyle(tint)
-                            StatusIconLabel(status: status)
+                            StatusIconLabel(status: status, useHardwareBatteryPercentage: useHardwarePercentage)
                                 .foregroundStyle(tint)
                         case .iconOnly:
-                            StatusIconLabel(status: status)
+                            StatusIconLabel(status: status, useHardwareBatteryPercentage: useHardwarePercentage)
                                 .foregroundStyle(tint)
                         case .textOnly:
                             StatusTextLabel(status: status, useHardwareBatteryPercentage: useHardwarePercentage)
@@ -120,19 +120,13 @@ private struct StatusTextLabel: View {
     let useHardwareBatteryPercentage: Bool
 
     var body: some View {
-        Text("\(displayedBatteryPercent(for: status, usingHardwareBatteryPercentage: useHardwareBatteryPercentage))%")
+        Text("\(currentBatteryPercent(for: status, usingHardwareBatteryPercentage: useHardwareBatteryPercentage))%")
     }
-}
-
-private func displayedBatteryPercent(for status: Rpc_StatusResponse, usingHardwareBatteryPercentage: Bool) -> Int {
-    if usingHardwareBatteryPercentage && status.batteryHardwareChargeAvailable {
-        return Int(status.batteryHardwareChargePercent)
-    }
-    return Int(status.currentCharge)
 }
 
 private struct StatusIconLabel: View {
     let status: Rpc_StatusResponse
+    let useHardwareBatteryPercentage: Bool
 
     private var primaryIconName: String {
         let adapterPresent = Int(status.adapterMaxWatts) > 0
@@ -142,11 +136,11 @@ private struct StatusIconLabel: View {
         if status.lowPowerModeEnabled {
             return "battery.25percent"
         }
-        let charge     = Int(status.currentCharge)
+        let charge     = currentBatteryPercent(for: status, usingHardwareBatteryPercentage: useHardwareBatteryPercentage)
         let limit      = Int(status.chargeLimit)
         let nearLimit  = charge >= max(limit - 1, 0)
         let trickleish = abs(status.batteryWattage) < 0.5
-        let pausedAtLimit = status.isConnected && limit < 100 &&
+        let pausedAtLimit = status.isChargeLimited && status.isConnected && limit < 100 &&
                             ( nearLimit
                               || (!status.isCharging && charge >= limit)
                               || (nearLimit && trickleish) )
@@ -299,14 +293,15 @@ struct HeaderView: View {
     
     private var computedStatusText: String {
         let adapterPresent = Int(status.adapterMaxWatts) > 0
+        let currentCharge = currentBatteryPercent(for: status, intent: userIntent)
         if status.forceDischargeActive && adapterPresent {
             return forceDischargeMode == .auto ? "Forced Discharge to \(autoCutoff)%" : "Forced Discharge"
         }
-        if status.isConnected && status.isCharging && status.currentCharge > status.chargeLimit && status.chargeLimit < 100 {
+        if status.isChargeLimited && status.isConnected && status.isCharging && currentCharge > Int(status.chargeLimit) && status.chargeLimit < 100 {
             return "404 - Limiter not found!"
         }
 
-        if status.isConnected && !status.isCharging && status.currentCharge >= status.chargeLimit && status.chargeLimit < 100 {
+        if status.isChargeLimited && status.isConnected && !status.isCharging && currentCharge >= Int(status.chargeLimit) && status.chargeLimit < 100 {
             return "Paused at \(status.chargeLimit)%"
         }
   
@@ -314,7 +309,7 @@ struct HeaderView: View {
             return "Charging to \(status.chargeLimit)%"
         }
   
-        if status.isConnected && status.currentCharge >= 99 {
+        if status.isConnected && currentCharge >= 99 {
             return "Fully Charged"
         }
         
@@ -336,7 +331,7 @@ struct HeaderView: View {
             HStack(spacing: 4) {
                 Text("")
                 if displayStyle == .iconOnly {
-                    Text("\(displayedBatteryPercent(for: status, usingHardwareBatteryPercentage: userIntent.showHardwareBatteryPercentage))%")
+                    Text("\(currentBatteryPercent(for: status, intent: userIntent))%")
                         .foregroundColor(chargeColor())
                         .monospacedDigit()
                 }
@@ -431,7 +426,7 @@ struct HeaderView: View {
     }
 
     private func chargeColor() -> Color {
-        let charge = Int(status.currentCharge)
+        let charge = currentBatteryPercent(for: status, intent: userIntent)
         let limit = Int(status.chargeLimit)
         if charge <= 10 { return .red }
         if charge <= 20 { return .orange }
@@ -494,15 +489,15 @@ struct BatteryDetailsView: View {
                     Grid(alignment: .leading, horizontalSpacing: 4) {
                         if showHardwareBatteryPercentage {
                             GridRow {
-                                Text("HW %:")
-                                Text(status.batteryHardwareChargeAvailable ? "\(status.batteryHardwareChargePercent)" : "—")
+                                Text("SW int:")
+                                Text("\(status.currentCharge)")
                                     .monospacedDigit()
                                     .gridColumnAlignment(.trailing)
-                                Text(status.batteryHardwareChargeAvailable ? "%" : "")
+                                Text("%")
                                     .foregroundColor(.primary)
                             }
                             GridRow {
-                                Text("HW exact:")
+                                Text("HW float:")
                                 Text(status.batteryHardwareChargeAvailable ? String(format: "%.1f", status.batteryHardwareChargePercentPrecise) : "—")
                                     .monospacedDigit()
                                     .gridColumnAlignment(.trailing)
@@ -672,9 +667,10 @@ struct QuickActionsView: View {
         let columns = Array(repeating: GridItem(.flexible()), count: columnsCount)
         let adapterPresent = (Int(status.adapterMaxWatts) > 0)
         let userLimit = (client.userIntent.chargeLimit < 100) ? client.userIntent.chargeLimit : client.userIntent.preferredChargeLimit
+        let currentCharge = currentBatteryPercent(for: status, intent: client.userIntent)
         // Auto is only meaningful when current charge is ABOVE the cutoff;
         // disable/hide Auto at or below the user limit, or when no adapter.
-        let autoAllowed = adapterPresent && (Int(status.currentCharge) > userLimit)
+        let autoAllowed = adapterPresent && (currentCharge > userLimit)
 
         LazyVGrid(columns: columns, spacing: 16) {
             MultiStateActionButton<ForceDischargeMode>(
@@ -945,6 +941,9 @@ struct FooterActionsView: View {
                         Toggle("Show Battery Details", isOn: $client.userIntent.showBatteryDetails)
 
                         Toggle("Hardware Battery Percentage", isOn: $client.userIntent.showHardwareBatteryPercentage)
+                            .onChange(of: client.userIntent.showHardwareBatteryPercentage) { _, newValue in
+                                Task { await client.setPowerFeature(feature: .useHardwareBatteryPercentage, enable: newValue) }
+                            }
                         if client.userIntent.showHardwareBatteryPercentage,
                            !(client.status?.batteryHardwareChargeAvailable ?? false) {
                             Text("Hardware percentage unavailable.")

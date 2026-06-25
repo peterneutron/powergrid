@@ -16,10 +16,20 @@ func testSystemInfo(charge int, smcChargingEnabled bool) *powerkit.SystemInfo {
 		},
 		SMC: &powerkit.SMCData{
 			State: powerkit.SMCState{
-				IsChargingEnabled: smcChargingEnabled,
+				IsChargingEnabled:        smcChargingEnabled,
+				IsAdapterEnabled:         true,
+				ChargingControlAvailable: true,
+				AdapterControlAvailable:  true,
 			},
 		},
 	}
+}
+
+func testSystemInfoWithHardwareCharge(swCharge int, hwPrecise float64, smcChargingEnabled bool) *powerkit.SystemInfo {
+	info := testSystemInfo(swCharge, smcChargingEnabled)
+	info.IOKit.Battery.HardwareChargeAvailable = true
+	info.IOKit.Battery.HardwareChargePercentPrecise = hwPrecise
+	return info
 }
 
 func resetServerTestGlobals(t *testing.T) {
@@ -211,5 +221,85 @@ func TestRunChargingLogicAllowsImmediateEnableBelowLimitDuringWakeHold(t *testin
 
 	if len(actions) != 1 || actions[0] != powerkit.ChargingActionOn {
 		t.Fatalf("expected wake hold to allow immediate enable below limit, got %v", actions)
+	}
+}
+
+func TestRunChargingLogicUsesRoundedHardwareChargeWhenEnabled(t *testing.T) {
+	resetServerTestGlobals(t)
+
+	var actions []powerkit.ChargingAction
+	setChargingStateFn = func(action powerkit.ChargingAction) error {
+		actions = append(actions, action)
+		return nil
+	}
+
+	d := &Daemon{
+		currentLimit:                  50,
+		wantHardwareBatteryPercentage: true,
+	}
+	d.runChargingLogicLocked(testSystemInfoWithHardwareCharge(49, 49.5, true))
+
+	if len(actions) != 1 || actions[0] != powerkit.ChargingActionOff {
+		t.Fatalf("expected rounded hardware charge to disable charging at limit, got %v", actions)
+	}
+}
+
+func TestRunChargingLogicRoundsHardwareChargeDownBelowHalf(t *testing.T) {
+	resetServerTestGlobals(t)
+
+	var actions []powerkit.ChargingAction
+	setChargingStateFn = func(action powerkit.ChargingAction) error {
+		actions = append(actions, action)
+		return nil
+	}
+
+	d := &Daemon{
+		currentLimit:                  50,
+		wantHardwareBatteryPercentage: true,
+	}
+	d.runChargingLogicLocked(testSystemInfoWithHardwareCharge(51, 49.4, true))
+
+	if len(actions) != 0 {
+		t.Fatalf("expected rounded hardware charge below limit to keep charging unchanged, got %v", actions)
+	}
+}
+
+func TestRunChargingLogicFallsBackToSoftwareChargeWhenHardwareUnavailable(t *testing.T) {
+	resetServerTestGlobals(t)
+
+	var actions []powerkit.ChargingAction
+	setChargingStateFn = func(action powerkit.ChargingAction) error {
+		actions = append(actions, action)
+		return nil
+	}
+
+	d := &Daemon{
+		currentLimit:                  50,
+		wantHardwareBatteryPercentage: true,
+	}
+	d.runChargingLogicLocked(testSystemInfo(49, true))
+
+	if len(actions) != 0 {
+		t.Fatalf("expected unavailable hardware charge to fall back to software charge below limit, got %v", actions)
+	}
+}
+
+func TestRunChargingLogicSkipsWhenChargingControlUnavailable(t *testing.T) {
+	resetServerTestGlobals(t)
+
+	var actions []powerkit.ChargingAction
+	setChargingStateFn = func(action powerkit.ChargingAction) error {
+		actions = append(actions, action)
+		return nil
+	}
+
+	info := testSystemInfo(90, true)
+	info.SMC.State.ChargingControlAvailable = false
+
+	d := &Daemon{currentLimit: 80}
+	d.runChargingLogicLocked(info)
+
+	if len(actions) != 0 {
+		t.Fatalf("expected no charging writes when SMC charging control is unavailable, got %v", actions)
 	}
 }

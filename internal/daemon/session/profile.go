@@ -9,6 +9,7 @@ type Profile struct {
 	Limit                          int
 	WantMagsafeLED                 bool
 	WantDisableChargingBeforeSleep bool
+	WantHardwareBatteryPercentage  bool
 }
 
 func ProfileForNoUser(defaultLimit int) Profile {
@@ -17,6 +18,7 @@ func ProfileForNoUser(defaultLimit int) Profile {
 		Limit:                          cfg.EffectiveChargeLimit(0, systemLimit, defaultLimit),
 		WantMagsafeLED:                 false,
 		WantDisableChargingBeforeSleep: true,
+		WantHardwareBatteryPercentage:  false,
 	}
 }
 
@@ -27,5 +29,6 @@ func ProfileForUser(u *consoleuser.ConsoleUser, defaultLimit int) Profile {
 		Limit:                          cfg.EffectiveChargeLimit(userLimit, systemLimit, defaultLimit),
 		WantMagsafeLED:                 cfg.ReadUserMagsafeLED(u.HomeDir),
 		WantDisableChargingBeforeSleep: cfg.ReadUserDisableChargingBeforeSleep(u.HomeDir),
+		WantHardwareBatteryPercentage:  cfg.ReadUserHardwareBatteryPercentage(u.HomeDir),
 	}
 }

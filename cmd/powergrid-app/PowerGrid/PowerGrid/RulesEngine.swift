@@ -8,6 +8,30 @@
 
 import Foundation
 
+func roundedHardwareBatteryPercent(for status: Rpc_StatusResponse) -> Int? {
+    guard status.batteryHardwareChargeAvailable else { return nil }
+    let precise = Double(status.batteryHardwareChargePercentPrecise)
+    if precise > 0 {
+        return Int(floor(precise + 0.5))
+    }
+    return Int(status.batteryHardwareChargePercent)
+}
+
+func currentBatteryPercent(for status: Rpc_StatusResponse, usingHardwareBatteryPercentage: Bool) -> Int {
+    if usingHardwareBatteryPercentage,
+       let hardwarePercent = roundedHardwareBatteryPercent(for: status) {
+        return hardwarePercent
+    }
+    return Int(status.currentCharge)
+}
+
+func currentBatteryPercent(for status: Rpc_StatusResponse, intent: UserIntent) -> Int {
+    currentBatteryPercent(
+        for: status,
+        usingHardwareBatteryPercentage: intent.showHardwareBatteryPercentage
+    )
+}
+
 struct RuleContext {
     let previousStatus: Rpc_StatusResponse?
     let currentStatus: Rpc_StatusResponse
@@ -21,8 +45,11 @@ struct RuleContext {
         return active < 100 ? active : currentIntent.preferredChargeLimit
     }
     var autoCutoff: Int { min(max(userLimit, 60), 99) }
+    var currentCharge: Int {
+        currentBatteryPercent(for: currentStatus, intent: currentIntent)
+    }
     var pausedAtOrAboveLimit: Bool {
-        currentStatus.isConnected && !currentStatus.isCharging && Int(currentStatus.chargeLimit) < 100 && Int(currentStatus.currentCharge) >= Int(currentStatus.chargeLimit)
+        currentStatus.isChargeLimited && currentStatus.isConnected && !currentStatus.isCharging && Int(currentStatus.chargeLimit) < 100 && currentCharge >= Int(currentStatus.chargeLimit)
     }
 }
 
@@ -47,9 +74,9 @@ struct ForceDischargeAutoCutoffRule: Rule {
         guard ctx.currentIntent.forceDischargeMode == .auto,
               ctx.previousIntent?.forceDischargeMode == .auto,
               ctx.currentStatus.forceDischargeActive,
-              let prev = ctx.previousStatus?.currentCharge else { return nil }
-        let prevCharge = Int(prev)
-        let curr = Int(ctx.currentStatus.currentCharge)
+              let previousStatus = ctx.previousStatus else { return nil }
+        let prevCharge = currentBatteryPercent(for: previousStatus, intent: ctx.currentIntent)
+        let curr = ctx.currentCharge
         guard prevCharge > ctx.autoCutoff && curr <= ctx.autoCutoff else { return nil }
         return .disableForceDischargeAndNotify(limit: ctx.autoCutoff)
     }
@@ -76,8 +103,8 @@ struct LowBattery20Rule: Rule {
     }
     func shouldFire(_ ctx: RuleContext) -> RuleAction? {
         guard let previous = ctx.previousStatus else { return nil }
-        let prev = Int(previous.currentCharge)
-        let curr = Int(ctx.currentStatus.currentCharge)
+        let prev = currentBatteryPercent(for: previous, intent: ctx.currentIntent)
+        let curr = ctx.currentCharge
         if prev > 20 && curr <= 20 {
             return .notifyLowPower(threshold: 20)
         }
@@ -92,8 +119,8 @@ struct LowBattery10Rule: Rule {
     }
     func shouldFire(_ ctx: RuleContext) -> RuleAction? {
         guard let previous = ctx.previousStatus else { return nil }
-        let prev = Int(previous.currentCharge)
-        let curr = Int(ctx.currentStatus.currentCharge)
+        let prev = currentBatteryPercent(for: previous, intent: ctx.currentIntent)
+        let curr = ctx.currentCharge
         if prev > 10 && curr <= 10 {
             return .notifyLowPower(threshold: 10)
         }

@@ -24,13 +24,14 @@ const (
 type PowerFeature int32
 
 const (
-	PowerFeature_POWER_FEATURE_UNSPECIFIED     PowerFeature = 0
-	PowerFeature_PREVENT_DISPLAY_SLEEP         PowerFeature = 1
-	PowerFeature_PREVENT_SYSTEM_SLEEP          PowerFeature = 2
-	PowerFeature_FORCE_DISCHARGE               PowerFeature = 3
-	PowerFeature_CONTROL_MAGSAFE_LED           PowerFeature = 4
-	PowerFeature_LOW_POWER_MODE                PowerFeature = 5 // Toggle macOS Low Power Mode
-	PowerFeature_DISABLE_CHARGING_BEFORE_SLEEP PowerFeature = 6 // Toggle disabling charging before sleep
+	PowerFeature_POWER_FEATURE_UNSPECIFIED       PowerFeature = 0
+	PowerFeature_PREVENT_DISPLAY_SLEEP           PowerFeature = 1
+	PowerFeature_PREVENT_SYSTEM_SLEEP            PowerFeature = 2
+	PowerFeature_FORCE_DISCHARGE                 PowerFeature = 3
+	PowerFeature_CONTROL_MAGSAFE_LED             PowerFeature = 4
+	PowerFeature_LOW_POWER_MODE                  PowerFeature = 5 // Toggle macOS Low Power Mode
+	PowerFeature_DISABLE_CHARGING_BEFORE_SLEEP   PowerFeature = 6 // Toggle disabling charging before sleep
+	PowerFeature_USE_HARDWARE_BATTERY_PERCENTAGE PowerFeature = 7 // Use rounded raw hardware percentage for charge-limit decisions
 )
 
 // Enum value maps for PowerFeature.
@@ -43,15 +44,17 @@ var (
 		4: "CONTROL_MAGSAFE_LED",
 		5: "LOW_POWER_MODE",
 		6: "DISABLE_CHARGING_BEFORE_SLEEP",
+		7: "USE_HARDWARE_BATTERY_PERCENTAGE",
 	}
 	PowerFeature_value = map[string]int32{
-		"POWER_FEATURE_UNSPECIFIED":     0,
-		"PREVENT_DISPLAY_SLEEP":         1,
-		"PREVENT_SYSTEM_SLEEP":          2,
-		"FORCE_DISCHARGE":               3,
-		"CONTROL_MAGSAFE_LED":           4,
-		"LOW_POWER_MODE":                5,
-		"DISABLE_CHARGING_BEFORE_SLEEP": 6,
+		"POWER_FEATURE_UNSPECIFIED":       0,
+		"PREVENT_DISPLAY_SLEEP":           1,
+		"PREVENT_SYSTEM_SLEEP":            2,
+		"FORCE_DISCHARGE":                 3,
+		"CONTROL_MAGSAFE_LED":             4,
+		"LOW_POWER_MODE":                  5,
+		"DISABLE_CHARGING_BEFORE_SLEEP":   6,
+		"USE_HARDWARE_BATTERY_PERCENTAGE": 7,
 	}
 )
 
@@ -208,6 +211,7 @@ type StatusResponse struct {
 	BatteryHardwareChargePercent        int32                  `protobuf:"varint,37,opt,name=battery_hardware_charge_percent,json=batteryHardwareChargePercent,proto3" json:"battery_hardware_charge_percent,omitempty"`                         // Battery management system charge percent
 	BatteryHardwareChargePercentPrecise float32                `protobuf:"fixed32,38,opt,name=battery_hardware_charge_percent_precise,json=batteryHardwareChargePercentPrecise,proto3" json:"battery_hardware_charge_percent_precise,omitempty"` // AppleRawCurrentCapacity / AppleRawMaxCapacity * 100
 	BatteryHardwareChargeAvailable      bool                   `protobuf:"varint,39,opt,name=battery_hardware_charge_available,json=batteryHardwareChargeAvailable,proto3" json:"battery_hardware_charge_available,omitempty"`                   // Raw smart-battery charge inputs were available
+	HardwareBatteryPercentageActive     bool                   `protobuf:"varint,40,opt,name=hardware_battery_percentage_active,json=hardwareBatteryPercentageActive,proto3" json:"hardware_battery_percentage_active,omitempty"`                // Daemon uses rounded hardware percentage for charge-limit decisions
 	unknownFields                       protoimpl.UnknownFields
 	sizeCache                           protoimpl.SizeCache
 }
@@ -515,6 +519,13 @@ func (x *StatusResponse) GetBatteryHardwareChargeAvailable() bool {
 	return false
 }
 
+func (x *StatusResponse) GetHardwareBatteryPercentageActive() bool {
+	if x != nil {
+		return x.HardwareBatteryPercentageActive
+	}
+	return false
+}
+
 type MutationRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Operation     MutationOperation      `protobuf:"varint,1,opt,name=operation,proto3,enum=rpc.MutationOperation" json:"operation,omitempty"`
@@ -732,7 +743,7 @@ var File_powergrid_proto protoreflect.FileDescriptor
 const file_powergrid_proto_rawDesc = "" +
 	"\n" +
 	"\x0fpowergrid.proto\x12\x03rpc\"\a\n" +
-	"\x05Empty\"\xfc\x0f\n" +
+	"\x05Empty\"\xc9\x10\n" +
 	"\x0eStatusResponse\x12%\n" +
 	"\x0ecurrent_charge\x18\x01 \x01(\x05R\rcurrentCharge\x12\x1f\n" +
 	"\vis_charging\x18\x02 \x01(\bR\n" +
@@ -775,7 +786,8 @@ const file_powergrid_proto_rawDesc = "" +
 	"\x18low_power_mode_available\x18$ \x01(\bR\x15lowPowerModeAvailable\x12E\n" +
 	"\x1fbattery_hardware_charge_percent\x18% \x01(\x05R\x1cbatteryHardwareChargePercent\x12T\n" +
 	"'battery_hardware_charge_percent_precise\x18& \x01(\x02R#batteryHardwareChargePercentPrecise\x12I\n" +
-	"!battery_hardware_charge_available\x18' \x01(\bR\x1ebatteryHardwareChargeAvailable\"\xa2\x01\n" +
+	"!battery_hardware_charge_available\x18' \x01(\bR\x1ebatteryHardwareChargeAvailable\x12K\n" +
+	"\"hardware_battery_percentage_active\x18( \x01(\bR\x1fhardwareBatteryPercentageActive\"\xa2\x01\n" +
 	"\x0fMutationRequest\x124\n" +
 	"\toperation\x18\x01 \x01(\x0e2\x16.rpc.MutationOperationR\toperation\x12\x14\n" +
 	"\x05limit\x18\x02 \x01(\x05R\x05limit\x12+\n" +
@@ -792,7 +804,7 @@ const file_powergrid_proto_rawDesc = "" +
 	"buildDirty\x12\x1b\n" +
 	"\tapi_major\x18\x06 \x01(\rR\bapiMajor\x12\x1b\n" +
 	"\tapi_minor\x18\a \x01(\rR\bapiMinor\x12\"\n" +
-	"\fcapabilities\x18\b \x03(\tR\fcapabilities*\xc7\x01\n" +
+	"\fcapabilities\x18\b \x03(\tR\fcapabilities*\xec\x01\n" +
 	"\fPowerFeature\x12\x1d\n" +
 	"\x19POWER_FEATURE_UNSPECIFIED\x10\x00\x12\x19\n" +
 	"\x15PREVENT_DISPLAY_SLEEP\x10\x01\x12\x18\n" +
@@ -800,7 +812,8 @@ const file_powergrid_proto_rawDesc = "" +
 	"\x0fFORCE_DISCHARGE\x10\x03\x12\x17\n" +
 	"\x13CONTROL_MAGSAFE_LED\x10\x04\x12\x12\n" +
 	"\x0eLOW_POWER_MODE\x10\x05\x12!\n" +
-	"\x1dDISABLE_CHARGING_BEFORE_SLEEP\x10\x06*d\n" +
+	"\x1dDISABLE_CHARGING_BEFORE_SLEEP\x10\x06\x12#\n" +
+	"\x1fUSE_HARDWARE_BATTERY_PERCENTAGE\x10\a*d\n" +
 	"\x11MutationOperation\x12\"\n" +
 	"\x1eMUTATION_OPERATION_UNSPECIFIED\x10\x00\x12\x14\n" +
 	"\x10SET_CHARGE_LIMIT\x10\x01\x12\x15\n" +
