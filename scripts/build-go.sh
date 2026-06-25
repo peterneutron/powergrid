@@ -54,6 +54,14 @@ hash_daemon_sources() {
         find "${DAEMON_SOURCE_DIR}" -type f -print | sort
         printf '%s\n' "${PROJECT_ROOT}/go.mod"
         printf '%s\n' "${PROJECT_ROOT}/go.sum"
+        if [ -n "${GOWORK:-}" ] && [ "${GOWORK}" != "off" ]; then
+            printf '%s\n' "${GOWORK}"
+        fi
+        if [ -d "${PROJECT_ROOT}/../powerkit-go" ]; then
+            find "${PROJECT_ROOT}/../powerkit-go" \
+                -path "*/.git" -prune -o \
+                \( -name "*.go" -o -name "go.mod" -o -name "go.sum" \) -type f -print | sort
+        fi
     } | while read -r f; do
         [ -f "$f" ] || continue
         printf '%s\n' "${f#${PROJECT_ROOT}/}"
@@ -91,10 +99,26 @@ else
     PROJECT_ROOT="${SCRIPT_DIR}/.."
     echo "Calculated Project Root: ${PROJECT_ROOT}"
 fi
+PROJECT_ROOT="$(cd "${PROJECT_ROOT}" && pwd -P)"
+
+if [ -z "${GOWORK:-}" ]; then
+    WORKSPACE_FILE="${PROJECT_ROOT}/../go.work"
+    if [ -f "${WORKSPACE_FILE}" ]; then
+        export GOWORK="${WORKSPACE_FILE}"
+        echo "Using Go workspace: ${GOWORK}"
+    fi
+fi
 
 GO_BIN_RESOLVED="$(resolve_go)"
 echo "Using go binary: ${GO_BIN_RESOLVED}"
 "${GO_BIN_RESOLVED}" version
+POWERKIT_MODULE="$(
+    cd "${PROJECT_ROOT}" && \
+        "${GO_BIN_RESOLVED}" list -m -f '{{.Path}}{{if .Version}} {{.Version}}{{else}} (workspace/local){{end}}{{if .Replace}} => {{.Replace.Path}}{{end}}' github.com/peterneutron/powerkit-go 2>/dev/null || true
+)"
+if [ -n "${POWERKIT_MODULE}" ]; then
+    echo "Resolved powerkit-go module: ${POWERKIT_MODULE}"
+fi
 
 DAEMON_SOURCE_DIR="${PROJECT_ROOT}/cmd/powergrid-daemon"
 HELPER_SOURCE_DIR="${PROJECT_ROOT}/cmd/powergrid-helper"

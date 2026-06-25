@@ -91,6 +91,7 @@ targets:
           - "$(DERIVED_FILE_DIR)/powergrid-go/powergridctl"
           - "$(DERIVED_FILE_DIR)/powergrid-go/powergrid-daemon.buildid"
           - "$(DERIVED_FILE_DIR)/powergrid-go/powergrid-daemon.buildmeta"
+        basedOnDependencyAnalysis: false
       - name: Stage Go Artifacts
         shell: /bin/zsh
         script: |

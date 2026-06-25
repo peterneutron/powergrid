@@ -297,6 +297,7 @@
 /* Begin PBXShellScriptBuildPhase section */
 		A70510C2A5D2359EC1402839 /* Generate Go Artifacts */ = {
 			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
 			files = (
 			);
