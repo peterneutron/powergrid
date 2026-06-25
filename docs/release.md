@@ -27,13 +27,23 @@ PowerGrid uses `master` as the trunk and tagged release branch.
    - release and tag `powerkit-go` first
    - update `go.mod` to the new tag
    - rerun verification in PowerGrid
-5. Tag the release on `master`:
+5. For releases touching battery telemetry, charge-limit enforcement, or daemon
+   status fields, capture a local daemon/API smoke check:
+
+   ```bash
+   powergridctl status
+   powergridctl daemon-info
+   ```
+
+   Note OS-specific capability changes, especially unavailable charging control
+   or native macOS charge-limit behavior.
+6. Tag the release on `master`:
 
    ```bash
    git tag vX.Y.Z
    ```
 
-6. Push `master` and the new tag.
+7. Push `master` and the new tag.
 
 ## Versioning Notes
 

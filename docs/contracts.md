@@ -65,10 +65,11 @@ Protocol rules:
 - debounced battery-update coalescing reduces redundant recompute
 - watchdog fallback periodically recomputes state
 - hardware operations are bounded by timeouts
+- SMC control availability is part of daemon state; unavailable charge control is not treated as active charge limiting
 
 ## Features
 
-- charge limit control with user and system preference precedence
+- charge limit control with user and system preference precedence, when a writable low-level charging control is available
 - force discharge
 - prevent display sleep and prevent system sleep
 - optional MagSafe LED control
@@ -108,6 +109,53 @@ Per-user preferences:
 - `ChargeLimit` (`int`, `60-100`)
 - `ControlMagsafeLED` (`bool`)
 - `DisableChargingBeforeSleep` (`bool`)
+- `UseHardwareBatteryPercentage` (`bool`)
+
+`ChargeLimit` remains a PowerGrid policy value. It does not guarantee that the
+current macOS build exposes a writable low-level charging control for every
+configured value.
+
+## Battery Control Availability
+
+PowerGrid depends on `powerkit-go` for low-level battery telemetry and control.
+The daemon treats SMC control state as capability-sensitive:
+
+- `SMC.State.ChargingControlAvailable=false`: skip charge-limit enforcement
+  writes, report `is_charge_limited=false`, and avoid UI text that implies
+  PowerGrid paused charging.
+- `SMC.State.AdapterControlAvailable=false`: do not report force discharge as
+  active merely because adapter state is unknown.
+- Missing SMC state defaults to enabled in user-facing status to avoid
+  presenting unavailable data as an active inhibit.
+
+This is especially important on macOS 27.0 Developer Beta 2, where the observed
+modern SMC charge-control key `CHTE` and legacy keys `BCLM`, `BCDS`, and `CH0B`
+were unavailable, while adapter control through `CHIE` still read back.
+
+## macOS Native Charge Limit Findings
+
+macOS 27 exposes a native manual charge-limit feature through private PowerUI
+surfaces. Investigation on macOS 27.0 Developer Beta 2 found:
+
+- `PowerUISmartChargeClient` was callable from an unentitled process for basic
+  reads and accepted allowed manual charge limits.
+- `availableChargeLimitsWithError:` returned `80, 85, 90, 95, 100`.
+- `setMCLLimit:error:` accepted `85` and restored `80`, but rejected `60` with
+  `PowerUISmartChargingErrorDomain Code=4`.
+- `temporarilyOverrideMCLTargetSoC:error:` also rejected `60` with the same
+  error.
+- `PowerUIChargingController` looked lower-level, but direct token registration
+  and `setChargeLimitTo:forLimitType:` calls returned no usable token / false
+  from an unentitled user process.
+- Direct `IOPSCopyBatteryLevelLimits` / `IOPSLimitBatteryLevel*` calls are
+  gated by Apple private entitlements such as `com.apple.private.iokit.soc-limit`.
+- SMC and IORegistry sweeps did not reveal an obvious replacement key that
+  tracks native target changes below Apple's `80%` floor.
+
+PowerGrid does not currently integrate the native PowerUI charge-limit path.
+If it is added later, it must be modeled as a separate backend with its own
+capability and range reporting rather than as a drop-in replacement for SMC
+charge inhibition.
 
 ## Build and Tooling
 

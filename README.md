@@ -7,7 +7,8 @@ PowerGrid is a macOS power management project built around a privileged daemon, 
 
 Use PowerGrid when you need:
 
-- a persistent charge limit enforced by a root daemon
+- a persistent charge limit enforced by a root daemon when the OS exposes a
+  writable charging control
 - force discharge and sleep-assertion controls
 - Low Power Mode and optional MagSafe LED control
 - a native menu bar app for live battery and adapter status
@@ -53,6 +54,8 @@ Keep the README short. Detailed material lives elsewhere:
 - daemon socket: `/var/run/powergrid.sock`
 - per-user preferences: `~/Library/Preferences/com.neutronstar.powergrid.plist`
 - system daemon preferences: `/Library/Preferences/com.neutronstar.powergrid.daemon.plist`
+- macOS can remove private battery-control surfaces between releases; PowerGrid
+  reports unavailable controls instead of inferring active limiting.
 
 ## Safety
 
