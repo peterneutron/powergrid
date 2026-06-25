@@ -25,12 +25,12 @@ packages:
 
 settings:
   base:
-    MACOSX_DEPLOYMENT_TARGET: 15.5
+    MACOSX_DEPLOYMENT_TARGET: 27.0
     ARCHS: arm64
     "EXCLUDED_ARCHS[sdk=macosx*]": x86_64
     ALWAYS_SEARCH_USER_PATHS: NO
     CODE_SIGN_STYLE: Automatic
-    DEVELOPMENT_TEAM: ""
+    DEVELOPMENT_TEAM: "$(POWERGRID_DEVELOPMENT_TEAM)"
     LOCALIZATION_PREFERS_STRING_CATALOGS: YES
     SWIFT_VERSION: 5.0
     ENABLE_USER_SCRIPT_SANDBOXING: YES
@@ -46,7 +46,7 @@ targets:
   PowerGrid:
     type: application
     platform: macOS
-    deploymentTarget: "15.5"
+    deploymentTarget: "27.0"
     sources:
       - path: PowerGrid
         excludes:
@@ -133,7 +133,7 @@ targets:
   PowerGridTests:
     type: bundle.unit-test
     platform: macOS
-    deploymentTarget: "15.5"
+    deploymentTarget: "27.0"
     sources:
       - path: PowerGridTests
     dependencies:
@@ -151,7 +151,7 @@ targets:
   PowerGridUITests:
     type: bundle.ui-testing
     platform: macOS
-    deploymentTarget: "15.5"
+    deploymentTarget: "27.0"
     sources:
       - path: PowerGridUITests
     dependencies:

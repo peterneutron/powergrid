@@ -171,7 +171,7 @@ fi
 echo "Daemon BuildID: ${DAEMON_BUILD_ID} (source=${BUILD_ID_SOURCE}, dirty=${BUILD_DIRTY})"
 
 # Keep the Go/Cgo deployment target aligned with project target.
-export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-15.5}"
+export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-27.0}"
 export CGO_CFLAGS="$(append_flag "${CGO_CFLAGS:-}" "-mmacosx-version-min=${MACOSX_DEPLOYMENT_TARGET}")"
 export CGO_LDFLAGS="$(append_flag "${CGO_LDFLAGS:-}" "-mmacosx-version-min=${MACOSX_DEPLOYMENT_TARGET}")"
 
