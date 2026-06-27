@@ -72,6 +72,14 @@ func chargeLimitWritable(for status: Rpc_StatusResponse?) -> Bool {
     return status.chargeLimitWritable
 }
 
+func disableChargingBeforeSleepAvailable(for status: Rpc_StatusResponse?) -> Bool {
+    guard let status else { return true }
+    if status.chargeLimitBackend.isEmpty {
+        return true
+    }
+    return status.chargeLimitBackend == "smc_inhibit"
+}
+
 func normalizedChargeLimit(_ limit: Int, for status: Rpc_StatusResponse?) -> Int {
     if limit >= 100 { return 100 }
 

@@ -129,6 +129,35 @@ func TestHandleBeforeSleepNoopWhenLimitIsHundred(t *testing.T) {
 	}
 }
 
+func TestHandleBeforeSleepNoopWhenBackendIsNativeMacOS(t *testing.T) {
+	resetServerTestGlobals(t)
+
+	calls := 0
+	setChargingStateFn = func(powerkit.ChargingAction) error {
+		calls++
+		return nil
+	}
+
+	d := &Daemon{
+		currentLimit:                   80,
+		wantDisableChargingBeforeSleep: true,
+		lastChargeLimitCapability:      testNativeChargeLimitSystemInfo(80).Controls.ChargeLimit,
+		sleepTransitionActive:          true,
+		wakeHoldUntil:                  time.Now().Add(time.Minute),
+	}
+	d.handleBeforeSleep()
+
+	if calls != 0 {
+		t.Fatalf("expected no SMC charging writes when backend is native macOS, got %d", calls)
+	}
+	if d.sleepTransitionActive {
+		t.Fatalf("expected sleep transition to be cleared")
+	}
+	if !d.wakeHoldUntil.IsZero() {
+		t.Fatalf("expected wake hold to be cleared")
+	}
+}
+
 func TestHandleBeforeSleepSuccessSetsTransitionActive(t *testing.T) {
 	resetServerTestGlobals(t)
 

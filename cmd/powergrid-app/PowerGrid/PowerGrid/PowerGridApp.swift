@@ -924,7 +924,9 @@ struct FooterActionsView: View {
                         }
 
                         Toggle("Disable Charging Before Sleep", isOn: $client.userIntent.disableChargingBeforeSleep)
+                            .disabled(!disableChargingBeforeSleepAvailable(for: client.status))
                             .onChange(of: client.userIntent.disableChargingBeforeSleep) { _, newValue in
+                                guard disableChargingBeforeSleepAvailable(for: client.status) else { return }
                                 Task { await client.setPowerFeature(feature: .disableChargingBeforeSleep, enable: newValue) }
                             }
 
