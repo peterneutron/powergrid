@@ -929,6 +929,10 @@ struct FooterActionsView: View {
                                 guard disableChargingBeforeSleepAvailable(for: client.status) else { return }
                                 Task { await client.setPowerFeature(feature: .disableChargingBeforeSleep, enable: newValue) }
                             }
+                        if !disableChargingBeforeSleepAvailable(for: client.status) {
+                            Text("Native macOS charge limiting handles this automatically.")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
 
                         Menu("Low Power") {
                             if client.status?.lowPowerModeAvailable ?? false {
