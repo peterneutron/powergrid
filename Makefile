@@ -20,7 +20,7 @@ SIGNING_RESOLVER_SCRIPT := ./scripts/resolve-signing.sh
 PROTO_SCRIPT            ?= ./scripts/gen_proto.sh
 TARGET_SWIFT_DIR        ?= $(PROJECT_DIR)/$(APP_NAME)/internal/rpc
 
-.PHONY: all build devsigned archive export package proto proto-check xcodegen xcodegen-check swift-test swiftlint test vet lint verify clean release
+.PHONY: all build devsigned archive export package proto proto-check xcodegen xcodegen-check signing-check swift-test swiftlint test vet lint verify clean release
 
 all: build
 release: build
@@ -36,6 +36,9 @@ xcodegen:
 
 xcodegen-check:
 	@bash ./scripts/xcodegen-check.sh
+
+signing-check:
+	@bash ./scripts/signing-identifiers-check.sh
 
 proto:
 	@echo "--> Running protobuf generation script..."
@@ -142,7 +145,7 @@ swiftlint:
 	fi
 	@swiftlint lint --config .swiftlint.yml --strict
 
-verify: test vet lint proto-check xcodegen-check swiftlint swift-test
+verify: signing-check test vet lint proto-check xcodegen-check swiftlint swift-test
 swift-test: xcodegen proto
 	@xcodebuild test \
 	  -project "$(PROJECT)" \
